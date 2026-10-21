@@ -28,6 +28,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Test Apps Script business rules
+        run: pnpm test
       - name: Build static frontend
         run: pnpm run build
         env:

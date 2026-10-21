@@ -351,7 +351,7 @@ function generateSessions_(user, fromDate, toDate) {
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     const activeClinics = new Set(records_('Clinics').filter(function(row) { return row.is_active; }).map(function(row) { return row.id; }));
-    const activePhysicians = new Set(records_('Physicians').filter(function(row) { return row.is_active; }).map(function(row) { return row.id; }));
+    const activePhysicians = new Set(records_('Physicians').filter(function(row) { return row.is_active && !row.is_placeholder; }).map(function(row) { return row.id; }));
     const templates = records_('ScheduleTemplates').filter(function(t) { return t.is_active && activeClinics.has(t.clinic_id) && activePhysicians.has(t.physician_id) && t.effective_from <= toDate && (!t.effective_until || t.effective_until >= fromDate); });
     const existing = new Set(records_('Sessions').filter(function(s) { return s.source_template_id; }).map(function(s) { return s.source_template_id + '|' + s.session_date; }));
     const cursor = new Date(fromDate + 'T12:00:00Z');
@@ -379,7 +379,8 @@ function generateDueNotifications_(user) {
   try {
     const today = bangkokToday_();
     const sessions = records_('Sessions').filter(function(row) { return row.session_status === 'scheduled' && row.session_date >= today; });
-    const users = records_('Users').filter(function(row) { return row.role === 'physician' && row.is_active && row.physician_id; });
+    const confirmedPhysicians = new Set(records_('Physicians').filter(function(row) { return row.is_active && !row.is_placeholder; }).map(function(row) { return row.id; }));
+    const users = records_('Users').filter(function(row) { return row.role === 'physician' && row.is_active && row.physician_id && confirmedPhysicians.has(row.physician_id); });
     const existing = new Set(records_('Notifications').map(function(n) { return n.user_id + '|' + n.session_id + '|' + n.kind; }));
     sessions.forEach(function(session) {
       const days = Math.round((new Date(session.session_date + 'T12:00:00Z').getTime() - new Date(today + 'T12:00:00Z').getTime()) / 86400000);
