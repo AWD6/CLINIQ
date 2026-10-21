@@ -299,14 +299,24 @@ td strong { color: #405a54; font-size: 9px; font-weight: 600; white-space: nowra
 .doctor-entry-form select optgroup { color: #42635a; font-weight: 700; }
 .doctor-entry-form select option { color: #315b52; padding: 7px; }
 .empty-doctor-list { border-radius: 10px; padding: 10px 12px; background: #fff8e9; color: #94733f; font-size: 10px; line-height: 1.6; }
-.credit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; margin-top: 14px; padding: 9px 12px; border: 1px solid #d8ebe5; border-radius: 12px; background: linear-gradient(100deg, #f4fbf8, #f7f5ff); color: #718780; font-size: 8px; letter-spacing: .035em; line-height: 1.6; text-align: center; }
-.credit-banner strong { color: #285b50; font-weight: 700; }
+.credit-banner { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 0 19px; padding: 14px 16px; border: 1px solid rgba(255,255,255,.72); border-radius: 17px; background: radial-gradient(circle at 8% 0%, rgba(252,225,161,.92), transparent 38%), linear-gradient(115deg, #dff7ee 0%, #e8f2ff 49%, #f4eaff 100%); color: #647c75; box-shadow: 0 12px 26px rgba(50,104,94,.13), inset 0 1px 0 #fff; line-height: 1.45; text-align: left; }
+.credit-banner:after { content: ''; position: absolute; z-index: -1; width: 112px; height: 112px; right: -47px; top: -62px; border-radius: 50%; border: 1px solid rgba(102,145,128,.2); box-shadow: 0 0 0 13px rgba(255,255,255,.15), 0 0 0 27px rgba(255,255,255,.12); }
+.credit-sparkle { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border: 1px solid rgba(255,255,255,.8); border-radius: 11px; background: rgba(255,255,255,.63); color: #9a7134; box-shadow: 0 4px 11px rgba(99,118,97,.1); }
+.credit-sparkle:last-child { width: 25px; height: 25px; flex-basis: 25px; border-radius: 9px; color: #7b62bc; }
+.credit-copy { display: grid; gap: 2px; min-width: 0; }
+.credit-copy small { color: #728b82; font-size: 8px; letter-spacing: .16em; font-weight: 700; }
+.credit-copy span { color: #526e66; font-size: 9px; letter-spacing: .01em; }
+.credit-copy strong { color: #253f39; font-size: 15px; font-weight: 700; letter-spacing: .015em; }
 .page-footer { gap: 8px; flex-wrap: wrap; }
 .page-footer span:last-child { text-align: right; }
 @media (max-width: 600px) {
   .art-copy h1 { font-size: 64px; }
   .doctor-entry-form select { min-height: 54px; }
   .specialty-selection { min-height: 58px; }
-  .credit-banner { margin-top: 12px; padding: 9px 10px; font-size: 8px; }
+  .credit-banner { margin-bottom: 16px; padding: 12px 11px; gap: 9px; }
+  .credit-copy span { font-size: 8px; }
+  .credit-copy strong { font-size: 14px; }
+  .credit-sparkle { width: 30px; height: 30px; flex-basis: 30px; }
+  .credit-sparkle:last-child { display: none; }
   .page-footer span:last-child { text-align: left; }
 }

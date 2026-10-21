@@ -10,7 +10,7 @@ let ready = false
 let bridgeOrigin = ''
 
 function trustedBridgeOrigin(origin) {
-  return origin === 'null' || origin === 'https://script.google.com' || /^https:\/\/(?:[^/]+\.)?script\.googleusercontent\.com$/.test(origin)
+  return origin === 'null' || origin === 'https://script.google.com' || /^https:\/\/(?:[a-z0-9-]+\.)*googleusercontent\.com$/i.test(origin)
 }
 
 function readSession() {
@@ -39,15 +39,24 @@ function ensureBridge() {
 }
 
 function isNestedBridgeSource(source) {
-  try {
-    if (source === frame?.contentWindow) return true
-    const nestedFrames = frame?.contentWindow?.frames
-    if (!nestedFrames) return false
-    for (let index = 0; index < nestedFrames.length; index++) {
-      if (nestedFrames[index] === source) return true
+  const root = frame?.contentWindow
+  if (!root || !source) return false
+  const visited = new Set()
+  function contains(windowRef, depth) {
+    if (windowRef === source) return true
+    if (depth >= 8 || visited.has(windowRef)) return false
+    visited.add(windowRef)
+    let count = 0
+    try { count = windowRef.frames.length } catch { return false }
+    for (let index = 0; index < count; index++) {
+      try {
+        const child = windowRef.frames[index]
+        if (child === source || contains(child, depth + 1)) return true
+      } catch { /* Continue checking sibling frames when one is unavailable. */ }
     }
-  } catch { return false }
-  return false
+    return false
+  }
+  return contains(root, 0)
 }
 
 function sendQueued() {

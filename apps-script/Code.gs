@@ -62,15 +62,17 @@ function startRoleSession_(request) {
     const users = records_('Users');
     user = users.find(function(row) { return String(row.role || '').trim().toLowerCase() === 'admin' && row.is_active !== false; });
     if (user) {
-      if (user.role !== 'admin' || user.is_active !== true || !user.display_name) writeFields_('Users', user._row, { display_name: user.display_name || 'ผู้ดูแล', role: 'admin', is_active: true });
-      user.display_name = user.display_name || 'ผู้ดูแล'; user.role = 'admin'; user.is_active = true;
+      const adminName = !user.display_name || String(user.display_name).trim() === 'ผู้ดูแล' ? 'พยาบาล' : user.display_name;
+      if (user.role !== 'admin' || user.is_active !== true || user.display_name !== adminName) writeFields_('Users', user._row, { display_name: adminName, role: 'admin', is_active: true });
+      user.display_name = adminName; user.role = 'admin'; user.is_active = true;
     } else {
       user = users.find(function(row) { return String(row.id || '') === 'mode-admin'; });
       if (user) {
-        writeFields_('Users', user._row, { display_name: user.display_name || 'ผู้ดูแล', role: 'admin', is_active: true });
-        user.display_name = user.display_name || 'ผู้ดูแล'; user.role = 'admin'; user.is_active = true;
+        const adminName = !user.display_name || String(user.display_name).trim() === 'ผู้ดูแล' ? 'พยาบาล' : user.display_name;
+        writeFields_('Users', user._row, { display_name: adminName, role: 'admin', is_active: true });
+        user.display_name = adminName; user.role = 'admin'; user.is_active = true;
       } else {
-        appendRecord_('Users', { id: 'mode-admin', email: '', display_name: 'ผู้ดูแล', role: 'admin', is_active: true, last_active_at: null, created_at: new Date().toISOString() });
+        appendRecord_('Users', { id: 'mode-admin', email: '', display_name: 'พยาบาล', role: 'admin', is_active: true, last_active_at: null, created_at: new Date().toISOString() });
         user = records_('Users').find(function(row) { return String(row.id || '') === 'mode-admin'; });
       }
     }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, CalendarDays,
   Check, CheckCheck, ChevronDown, Clock3, LogOut, Menu, Plus,
-  RefreshCw, Search, Settings2, ShieldCheck, Stethoscope, UserRound, Users,
+  RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Stethoscope, UserRound, Users,
   X, XCircle,
 } from 'lucide-react'
 import { isConfigured, apiClient } from './lib/sheetsClient'
@@ -108,8 +108,9 @@ function Login() {
     </div>
     <section className="login-panel"><div className="login-inner"><BrandMark />
       <div className="welcome"><div className="eyebrow">ตารางเวรพร้อมแล้ว ✨</div><h2>{mode === 'choose' ? 'เข้าใช้งานแบบไหน?' : 'เลือกชื่อแพทย์'}</h2><p>{mode === 'choose' ? 'แตะเลือกเพื่อไปยังหน้าที่ต้องการ' : 'ตารางและการแจ้งเตือนจะแสดงเฉพาะชื่อที่เลือก'}</p></div>
+      <div className="credit-banner"><span className="credit-sparkle"><Sparkles size={17} /></span><span className="credit-copy"><small>MADE WITH CARE · CLINIQ</small><span>conceived, designed and Brought to life by</span><strong>RN.Patipon Wiyo</strong></span><span className="credit-sparkle"><Sparkles size={13} /></span></div>
       {mode === 'choose' ? <div className="entry-choice-grid">
-        <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>ผู้ดูแล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบกลับ</small></span><ArrowRight size={18} /></button>
+        <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>พยาบาล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบกลับ</small></span><ArrowRight size={18} /></button>
         <button className="entry-role-card entry-doctor" onClick={() => setMode('physician')} disabled={busy}><span className="entry-role-icon"><Stethoscope size={22} /></span><span><strong>แพทย์</strong><small>ดูตาราง · ยืนยัน · แจ้งติดภารกิจ</small></span><ArrowRight size={18} /></button>
       </div> : <div className="doctor-entry-form">
         <label htmlFor="doctor-entry">เลือกชื่ออาจารย์</label>
@@ -130,7 +131,6 @@ function Login() {
       {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังเปิดหน้าทำงาน…</div>}
       {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
       <div className="login-foot">ข้อมูลนี้ทำเพื่อเตรียมความพร้อมของห้องตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
-      <div className="credit-banner">conceived, designed and Brought to life by <strong>RN.Patipon Wiyo</strong></div>
     </div></section>
   </main>
 }
@@ -219,7 +219,7 @@ function Workspace({ session, profile }) {
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <BrandMark />
-      <div className="role-chip"><span className={`role-dot ${admin ? 'admin-dot' : ''}`} />{admin ? 'พยาบาลผู้ดูแล' : 'แพทย์'}</div>
+      <div className="role-chip"><span className={`role-dot ${admin ? 'admin-dot' : ''}`} />{admin ? 'พยาบาล' : 'แพทย์'}</div>
       <div className="side-section-label">เมนูหลัก</div>
       <nav className="side-nav">{nav.map((item) => {
         const Icon = item.icon
@@ -229,7 +229,7 @@ function Workspace({ session, profile }) {
       })}</nav>
       <div className="sidebar-spacer" />
       <div className="side-note"><div className="side-note-icon"><ShieldCheck size={16} /></div><div><strong>ข้อมูลตาราง</strong><span>ไม่มีข้อมูลผู้ป่วยในระบบ</span></div></div>
-      <div className="side-user"><div className="avatar">{profile.display_name?.slice(0, 1) || 'ผ'}</div><div className="side-user-copy"><strong>{profile.display_name}</strong><span>{admin ? 'ผู้ดูแลระบบ' : data.physicians[0]?.display_name || 'แพทย์'}</span></div><button title="ออกจากระบบ" className="icon-button" onClick={() => apiClient.auth.signOut()}><LogOut size={17} /></button></div>
+      <div className="side-user"><div className="avatar">{profile.display_name?.slice(0, 1) || 'พ'}</div><div className="side-user-copy"><strong>{profile.display_name}</strong><span>{admin ? 'พยาบาล' : data.physicians[0]?.display_name || 'แพทย์'}</span></div><button title="ออกจากระบบ" className="icon-button" onClick={() => apiClient.auth.signOut()}><LogOut size={17} /></button></div>
     </aside>
     {mobileNav && <button aria-label="ปิดเมนู" className="mobile-scrim" onClick={() => setMobileNav(false)} />}
     <div className="main-column">
@@ -276,7 +276,7 @@ function AdminOverview({ data, refresh, profile }) {
     ...awaiting.map((s) => ({ id: `await-${s.id}`, icon: Clock3, tone: 'amber', title: `ใกล้วันตรวจแต่ยังไม่ยืนยัน · ${physicianMap.get(s.physician_id) || 'แพทย์'}`, detail: `${clinicMap.get(s.clinic_id)} · ${dateText(s.session_date, { day: 'numeric', month: 'short' })}`, session: s })),
   ]
   return <>
-    <PageTitle eyebrow="แดชบอร์ดผู้ดูแล" title={`สวัสดี, ${profile.display_name}`} description="ติดตามตารางออกตรวจ การยืนยัน และงานที่ต้องประสาน" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจล่วงหน้า 90 วัน</button>} />
+    <PageTitle eyebrow="แดชบอร์ดพยาบาล" title={`สวัสดี, ${profile.display_name}`} description="ติดตามตารางออกตรวจ การยืนยัน และงานที่ต้องประสาน" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจล่วงหน้า 90 วัน</button>} />
     <div className="welcome-strip"><div><span className="welcome-icon"><CalendarDays size={20} /></span><div><strong>วันนี้ {dateText(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><small>รอบตรวจที่กำหนดไว้จะสร้างจากตารางประจำโดยไม่ซ้ำกัน</small></div></div><button className="button button-outline" onClick={() => generateNextSessions(refresh)}><RefreshCw size={16} />สร้างตาราง</button></div>
     <div className="stats-grid">
       <StatCard label="รอบตรวจ 30 วัน" value={upcoming30.length} note="ทุกคลินิก" icon={CalendarDays} tone="teal" />
@@ -349,7 +349,7 @@ function AdminSessionCard({ item, index, clinicName, physicianName, doctors, onE
     <div className="session-date-col"><div className="session-day">{dateText(item.session_date, { day: '2-digit' })}</div><div className="session-month">{dateText(item.session_date, { month: 'short', weekday: 'short' })}</div></div>
     <div className="session-main"><div className="session-title-line"><strong>{clinicName || 'คลินิก'}</strong><span className="session-time"><Clock3 size={14} />{timeText(item.start_time)}–{timeText(item.end_time)} น.</span>{item.replaces_physician_id && <span className="subtle-tag">มีแพทย์ทดแทน</span>}</div>
       <div className="session-doctor"><UserRound size={15} />{physicianName || 'แพทย์'}<span className="middot">·</span><ResponseBadge status={item.doctor_response_status} /></div>
-      {item.session_status === 'cancelled' && <div className="cancelled-note"><XCircle size={14} />งดตรวจ: {item.cancellation_reason || 'บันทึกโดยผู้ดูแล'}</div>}
+      {item.session_status === 'cancelled' && <div className="cancelled-note"><XCircle size={14} />งดตรวจ: {item.cancellation_reason || 'บันทึกโดยพยาบาล'}</div>}
       {item.doctor_response_status === 'busy' && <div className="busy-note"><AlertCircle size={14} />แจ้งติดภารกิจ{item.doctor_response_note ? `: ${item.doctor_response_note}` : ''}{!item.resolved_at && <span className="needs-resolution">· รอบันทึกผลจัดการ</span>}</div>}
       {item.admin_resolution_note && <div className="resolution-note"><Check size={14} />ผลการจัดการ: {item.admin_resolution_note}</div>}
     </div>
@@ -477,7 +477,7 @@ function AdminSetup({ data, refresh }) {
         return <tr key={t.id}><td>{dow[t.weekday]}{t.week_of_month ? ` · สัปดาห์ที่ ${t.week_of_month}` : ''}<span className="table-sub">{timeText(t.start_time)}–{timeText(t.end_time)} น.</span></td><td>{clinicMap.get(t.clinic_id)}</td><td>{doctor?.display_name || 'ไม่พบชื่อ'}{doctor?.is_placeholder && <span className="table-sub placeholder-label">รอยืนยันชื่อแพทย์</span>}</td><td>{templateEdit?.id === t.id ? <div className="template-edit-fields"><input type="time" value={templateEdit.start_time} onChange={(e) => setTemplateEdit({ ...templateEdit, start_time: e.target.value })} /><input type="time" value={templateEdit.end_time} onChange={(e) => setTemplateEdit({ ...templateEdit, end_time: e.target.value })} /><input type="number" min="0" value={templateEdit.quota} onChange={(e) => setTemplateEdit({ ...templateEdit, quota: e.target.value })} /><button className="button button-small button-primary" onClick={saveTemplate}>บันทึก</button></div> : t.appointment_quota}</td><td><span className={`status-pill ${t.is_active ? 'status-green' : 'status-gray'}`}>{t.is_active ? 'ใช้งาน' : 'หยุดใช้'}</span></td><td><button className="text-button" onClick={() => templateEdit?.id === t.id ? setTemplateEdit(null) : setTemplateEdit({ id: t.id, quota: t.appointment_quota, start_time: timeText(t.start_time), end_time: timeText(t.end_time) })}>แก้ไข</button><button className="text-button subtle-action" onClick={() => toggleTemplate(t)}>{t.is_active ? 'หยุดใช้' : 'เปิดใช้'}</button></td></tr>
       })}{!data.templates.length && <tr><td colSpan="6" className="table-empty">ยังไม่มีตารางเวรประจำ</td></tr>}</tbody></table></div>
     </section>
-    <section className="panel doctor-directory"><div className="panel-header"><div><h2>รายชื่อแพทย์</h2><p>ข้อมูลที่ถอดจากภาพยังต้องให้ผู้ดูแลยืนยันก่อนใช้จริง</p></div><span className="count-pill">{data.physicians.length} ราย</span></div>
+    <section className="panel doctor-directory"><div className="panel-header"><div><h2>รายชื่อแพทย์</h2><p>ข้อมูลที่ถอดจากภาพยังต้องให้พยาบาลยืนยันก่อนใช้จริง</p></div><span className="count-pill">{data.physicians.length} ราย</span></div>
       <div className="doctor-directory-grid">{data.physicians.map((p) => {
         const user = data.profiles.find((item) => item.physician_id === p.id)
         const editing = physicianEdit?.id === p.id
@@ -520,7 +520,7 @@ function AdminHistory({ data }) {
     if (old.admin_resolution_note !== next.admin_resolution_note && next.admin_resolution_note) changes.push(`ผลจัดการ: ${next.admin_resolution_note}`)
     return changes.length ? `${clinic || ''} · ${changes.join(' · ')}` : `แก้ไขข้อมูลรอบตรวจ ${clinic || ''} · ${physician || ''}`
   }
-  return <><PageTitle eyebrow="ประวัติระบบ" title="ประวัติการแก้ไข" description="ติดตามการปรับตาราง ยอดนัด การตอบกลับ และผลจัดการของผู้ดูแล" />
+  return <><PageTitle eyebrow="ประวัติระบบ" title="ประวัติการแก้ไข" description="ติดตามการปรับตาราง ยอดนัด การตอบกลับ และผลจัดการของพยาบาล" />
     <section className="panel history-panel"><div className="panel-header"><div><h2>รายการล่าสุด</h2><p>เก็บเวลาและผู้ดำเนินการไว้กับทุกรอบตรวจ</p></div><span className="subtle-tag">{data.events.length} รายการ</span></div>
       <div className="history-list">{data.events.map((event) => <div className="history-row" key={event.id}><div className={`history-icon ${event.action === 'update' ? 'history-update' : 'history-create'}`}>{event.action === 'update' ? <Settings2 size={16} /> : <Plus size={16} />}</div><div className="history-copy"><strong>{description(event)}</strong><span>{profileMap.get(event.actor_id) || 'ระบบ'} · {dateTimeText(event.created_at)}</span></div><span className="history-kind">{event.action === 'update' ? 'แก้ไข' : event.action === 'insert' ? 'สร้าง' : 'ลบ'}</span></div>)}
         {!data.events.length && <EmptyState icon={Clock3} title="ยังไม่มีประวัติการแก้ไข" description="รายการจะปรากฏเมื่อมีการสร้างหรือแก้ไขรอบตรวจ" />}</div>
@@ -555,9 +555,9 @@ function DoctorDashboard({ data, refresh, profile }) {
       {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="replacement-banner"><Users size={16} />รอบนี้มีแพทย์ทดแทนแล้ว คุณไม่ต้องตอบกลับรอบนี้</div>}
       {nextAssigned && next.doctor_response_status === 'pending' && <div className="next-actions"><button className="button button-light" onClick={() => respond(next, 'confirmed')}><Check size={16} />ยืนยันออกตรวจ</button><button className="button button-light-outline" onClick={() => setResponseModal(next)}><AlertCircle size={16} />แจ้งติดภารกิจ</button></div>}
       {nextAssigned && next.doctor_response_status === 'confirmed' && <div className="confirmation-line"><CheckCheck size={16} />ยืนยันแล้ว{next.doctor_responded_at ? ` · ${dateTimeText(next.doctor_responded_at)}` : ''}</div>}
-      {nextAssigned && next.doctor_response_status === 'busy' && <div className="doctor-busy-line"><AlertCircle size={16} />แจ้งติดภารกิจแล้ว · รอพยาบาลผู้ดูแลบันทึกผลการจัดการ</div>}
-      {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="confirmation-line"><CheckCheck size={16} />ผู้ดูแลบันทึกการจัดแพทย์ทดแทนแล้ว</div>}
-    </section> : <section className="next-session-empty"><CalendarDays size={23} /><div><strong>ยังไม่มีรอบตรวจถัดไป</strong><span>ติดต่อพยาบาลผู้ดูแลหากตารางของคุณยังไม่แสดง</span></div></section>}
+      {nextAssigned && next.doctor_response_status === 'busy' && <div className="doctor-busy-line"><AlertCircle size={16} />แจ้งติดภารกิจแล้ว · รอพยาบาลบันทึกผลการจัดการ</div>}
+      {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="confirmation-line"><CheckCheck size={16} />พยาบาลบันทึกการจัดแพทย์ทดแทนแล้ว</div>}
+    </section> : <section className="next-session-empty"><CalendarDays size={23} /><div><strong>ยังไม่มีรอบตรวจถัดไป</strong><span>ติดต่อพยาบาลหากตารางของคุณยังไม่แสดง</span></div></section>}
     <section className="panel calendar-panel"><div className="panel-header calendar-heading"><div><h2>ตารางรายเดือน</h2><p>แตะวันที่มีรอบตรวจเพื่อดูคลินิกและยอดนัด</p></div><div className="month-control"><button className="icon-button" onClick={() => setMonth(shiftMonth(month, -1))}><ArrowLeft size={17} /></button><strong>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric', timeZone: BANGKOK }).format(new Date(`${month}-01T00:00:00+07:00`))}</strong><button className="icon-button" onClick={() => setMonth(shiftMonth(month, 1))}><ArrowRight size={17} /></button></div></div>
       <MonthCalendar month={month} sessions={thisMonth} selectedDate={selectedDate} onSelect={(date) => setSelectedDate(date === selectedDate ? '' : date)} />
       {selectedDate && <div className="selected-day-detail"><div className="selected-day-head"><h3>{dateText(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}</h3><button className="text-button" onClick={() => setSelectedDate('')}>ปิด</button></div>{dateSessions.length ? dateSessions.map((s) => <DoctorSessionRow key={s.id} item={s} clinicName={clinicMap.get(s.clinic_id)} onRespond={setResponseModal} physicianId={profile.physician_id} />) : <p className="empty-inline">ไม่มีรอบตรวจในวันนี้</p>}</div>}
@@ -595,11 +595,11 @@ function BusyResponseModal({ session, clinicName, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   async function submit() {
-    if (!note.trim()) { setError('กรุณาระบุหมายเหตุให้พยาบาลผู้ดูแลทราบ'); return }
+    if (!note.trim()) { setError('กรุณาระบุหมายเหตุให้พยาบาลทราบ'); return }
     setSaving(true); setError('')
     try { await onSave(note.trim()) } catch { setError('ส่งข้อมูลไม่สำเร็จ ลองอีกครั้ง'); setSaving(false) }
   }
-  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาลผู้ดูแล</div><h2>แจ้งติดภารกิจ</h2><p>{clinicName} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</p><div className="soft-warning"><AlertCircle size={17} /><span>การแจ้งนี้ยังไม่ยกเลิกรอบตรวจ พยาบาลผู้ดูแลจะเป็นผู้บันทึกผลการจัดการ</span></div><label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุข้อมูลที่ต้องการแจ้งพยาบาล" /><small className="note-privacy">บันทึกเฉพาะเหตุขัดข้อง · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving} onClick={submit}><AlertCircle size={16} />{saving ? 'กำลังส่ง…' : 'แจ้งติดภารกิจ'}</button></div></section></div>
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาล</div><h2>แจ้งติดภารกิจ</h2><p>{clinicName} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</p><div className="soft-warning"><AlertCircle size={17} /><span>การแจ้งนี้ยังไม่ยกเลิกรอบตรวจ พยาบาลจะเป็นผู้บันทึกผลการจัดการ</span></div><label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุข้อมูลที่ต้องการแจ้งพยาบาล" /><small className="note-privacy">บันทึกเฉพาะเหตุขัดข้อง · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving} onClick={submit}><AlertCircle size={16} />{saving ? 'กำลังส่ง…' : 'แจ้งติดภารกิจ'}</button></div></section></div>
 }
 
 function NotificationCenter({ notifications, refresh }) {
