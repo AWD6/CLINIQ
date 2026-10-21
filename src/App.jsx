@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, CalendarDays,
-  Check, CheckCheck, ChevronDown, CircleHelp, Clock3, LogOut, Menu, Plus,
+  Check, CheckCheck, ChevronDown, Clock3, LogOut, Menu, Plus,
   RefreshCw, Search, Settings2, ShieldCheck, Stethoscope, UserRound, Users,
   X, XCircle,
 } from 'lucide-react'
-import { googleClientId, isConfigured, apiClient } from './lib/sheetsClient'
+import { isConfigured, apiClient } from './lib/sheetsClient'
 
 const BANGKOK = 'Asia/Bangkok'
 const clinicColor = ['teal', 'blue', 'rose', 'amber', 'violet', 'cyan']
@@ -53,10 +53,10 @@ const weekdayText = (date) => new Intl.DateTimeFormat('th-TH', { weekday: 'long'
 function ConfigNotice() {
   return <main className="setup-screen"><section className="setup-card">
     <BrandMark large />
-    <h1>ตั้งค่าการเชื่อมต่อ Google Sheets</h1>
-    <p>เพิ่ม URL ของ Apps Script และ Google Client ID ในไฟล์ .env.local แล้วเปิดเว็บใหม่</p>
-    <div className="code-sample">VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/…/exec<br />VITE_GOOGLE_CLIENT_ID=…apps.googleusercontent.com</div>
-    <p className="muted">หน้าเว็บไม่มีรหัสผ่านฐานข้อมูลหรือคีย์สิทธิ์สูง การตรวจสิทธิ์ทำใน Apps Script</p>
+    <h1>กำลังเชื่อมต่อ Google Sheet</h1>
+    <p>ยังไม่ได้ตั้งค่าลิงก์ Apps Script สำหรับบันทึกข้อมูล</p>
+    <div className="code-sample">VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/…/exec</div>
+    <p className="muted">ตั้งค่าครั้งเดียว แล้วเปิดเว็บใหม่ได้เลย</p>
   </section></main>
 }
 
@@ -67,51 +67,51 @@ function BrandMark({ large = false }) {
   </div>
 }
 
-function Login({ onSignedIn }) {
+function Login() {
+  const [mode, setMode] = useState('choose')
+  const [physicians, setPhysicians] = useState([])
+  const [physicianId, setPhysicianId] = useState('')
+  const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => {
-    let timer
-    let attempts = 0
-    const mountGoogleButton = () => {
-      if (!window.google?.accounts?.id) {
-        if (attempts++ < 80) timer = window.setTimeout(mountGoogleButton, 100)
-        else setError('โหลดปุ่มเข้าสู่ระบบ Google ไม่สำเร็จ กรุณาโหลดหน้าใหม่')
-        return
-      }
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response) => {
-          setBusy(true); setError('')
-          const { error: signInError } = await apiClient.auth.signInWithIdToken({ token: response.credential })
-          setBusy(false)
-          if (signInError) setError(signInError.message || 'บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าใช้ กรุณาติดต่อพยาบาลผู้ดูแล')
-          else onSignedIn?.()
-        },
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      })
-      const target = document.getElementById('google-sign-in-button')
-      if (target) window.google.accounts.id.renderButton(target, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: 'signin_with', width: 320, locale: 'th' })
-    }
-    mountGoogleButton()
-    return () => window.clearTimeout(timer)
-  }, [onSignedIn])
+    let alive = true
+    apiClient.listPhysicians().then(({ data, error: listError }) => {
+      if (!alive) return
+      if (listError) setError(listError.message || 'โหลดรายชื่อแพทย์ไม่สำเร็จ')
+      else setPhysicians(data || [])
+      setLoadingDoctors(false)
+    })
+    return () => { alive = false }
+  }, [])
+  async function enter(role, selectedPhysician = null) {
+    setBusy(true); setError('')
+    const { error: enterError } = await apiClient.auth.enterRole({ role, physician_id: selectedPhysician })
+    setBusy(false)
+    if (enterError) setError(enterError.message || 'เปิดหน้าใช้งานไม่สำเร็จ กรุณาลองใหม่')
+  }
   return <main className="login-screen">
     <div className="login-art"><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" />
-      <div className="art-copy"><div className="art-kicker">MAHARAJ NAKORN CHIANG MAI</div><h1>ตารางออกตรวจ<br />ที่ทุกคนเห็นตรงกัน</h1><p>ข้อมูลตารางและยอดนัดที่พยาบาลดูแล<br />พร้อมให้แพทย์ยืนยันได้ทุกที่</p>
-        <div className="art-note"><ShieldCheck size={18} /> เข้าใช้งานด้วยบัญชีที่ได้รับเชิญ</div></div>
+      <div className="art-copy"><div className="art-kicker">MAHARAJ NAKORN CHIANG MAI</div><h1>ตารางออกตรวจ<br />จบในหน้าเดียว</h1><p>จัดตารางง่าย เห็นยอดนัดชัด<br />แพทย์ตอบกลับได้จากมือถือ</p>
+        <div className="art-note"><ShieldCheck size={18} /> บันทึกลง Google Sheet โดยตรง</div></div>
       <div className="art-bottom">คลินิกเฉพาะทางนอกเวลา · เวลาประเทศไทย</div>
     </div>
     <section className="login-panel"><div className="login-inner"><BrandMark />
-      <div className="welcome"><div className="eyebrow">ยินดีต้อนรับ</div><h2>เข้าสู่ระบบ</h2><p>สำหรับพยาบาลผู้ดูแลและแพทย์</p></div>
-      <div className="form-stack">
-        <div id="google-sign-in-button" aria-label="เข้าสู่ระบบด้วย Google" />
-        {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังตรวจสอบสิทธิ์…</div>}
-        {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
-      </div>
-      <div className="login-help"><CircleHelp size={17} /><span>ใช้บัญชี Google ที่พยาบาลผู้ดูแลเพิ่มสิทธิ์ไว้ในระบบ</span></div>
-      <div className="login-foot">ข้อมูลนี้ใช้เพื่อประสานงานตารางตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
+      <div className="welcome"><div className="eyebrow">ตารางเวรพร้อมแล้ว ✨</div><h2>{mode === 'choose' ? 'เข้าใช้งานแบบไหน?' : 'เลือกชื่อแพทย์'}</h2><p>{mode === 'choose' ? 'แตะเลือกเพื่อไปยังหน้าที่ต้องการ' : 'ตารางและการแจ้งเตือนจะแสดงเฉพาะชื่อที่เลือก'}</p></div>
+      {mode === 'choose' ? <div className="entry-choice-grid">
+        <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>ผู้ดูแล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบ</small></span><ArrowRight size={18} /></button>
+        <button className="entry-role-card entry-doctor" onClick={() => setMode('physician')} disabled={busy}><span className="entry-role-icon"><Stethoscope size={22} /></span><span><strong>แพทย์</strong><small>ดูตาราง · ยืนยัน · แจ้งติดภารกิจ</small></span><ArrowRight size={18} /></button>
+      </div> : <div className="doctor-entry-form">
+        <label htmlFor="doctor-entry">ชื่อแพทย์</label>
+        <select id="doctor-entry" value={physicianId} onChange={(event) => setPhysicianId(event.target.value)} disabled={loadingDoctors || busy}>
+          <option value="">{loadingDoctors ? 'กำลังโหลดรายชื่อ…' : 'เลือกชื่อของคุณ'}</option>
+          {physicians.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.display_name}</option>)}
+        </select>
+        <div className="doctor-entry-actions"><button className="button button-quiet" onClick={() => { setMode('choose'); setError('') }}>ย้อนกลับ</button><button className="button button-primary" disabled={!physicianId || busy} onClick={() => enter('physician', physicianId)}>{busy ? 'กำลังเปิด…' : 'ไปที่ตารางของฉัน'}<ArrowRight size={16} /></button></div>
+      </div>}
+      {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังเปิดหน้าทำงาน…</div>}
+      {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
+      <div className="login-foot">ข้อมูลนี้ใช้ประสานงานตารางตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
     </div></section>
   </main>
 }
@@ -138,18 +138,18 @@ function App() {
     apiClient.from('user_profiles').select('*').eq('id', session.user.id).maybeSingle()
       .then(({ data, error }) => {
         if (!alive) return
-        if (error || !data || !data.is_active) setProfileError('บัญชีนี้ยังไม่ได้เปิดใช้งานในระบบ กรุณาติดต่อพยาบาลผู้ดูแล')
+        if (error || !data || !data.is_active) setProfileError('เปิดข้อมูลไม่สำเร็จ กรุณากลับไปเลือกหน้าใช้งานใหม่')
         else setProfile(data)
       })
     return () => { alive = false }
   }, [session])
 
   if (!isConfigured) return <ConfigNotice />
-  if (authBusy) return <div className="loading-screen"><div className="spinner" /><span>กำลังตรวจสอบบัญชี…</span></div>
+  if (authBusy) return <div className="loading-screen"><div className="spinner" /><span>กำลังเปิดหน้าใช้งาน…</span></div>
   if (!session) return <Login />
   if (profileError) return <main className="setup-screen"><section className="setup-card"><BrandMark large /><div className="inline-error centered"><AlertCircle size={19} />{profileError}</div><button className="button button-quiet" onClick={() => apiClient.auth.signOut()}><LogOut size={16} />ออกจากระบบ</button></section></main>
-  if (!profile) return <div className="loading-screen"><div className="spinner" /><span>กำลังโหลดสิทธิ์เข้าใช้งาน…</span></div>
-  if (profile.role === 'physician' && !profile.physician_id) return <main className="setup-screen"><section className="setup-card"><BrandMark large /><h1>ยังไม่ได้ผูกบัญชีแพทย์</h1><p>ให้พยาบาลผู้ดูแลตรวจสอบบัญชีนี้ในระบบ</p><button className="button button-quiet" onClick={() => apiClient.auth.signOut()}><LogOut size={16} />ออกจากระบบ</button></section></main>
+  if (!profile) return <div className="loading-screen"><div className="spinner" /><span>กำลังโหลดตาราง…</span></div>
+  if (profile.role === 'physician' && !profile.physician_id) return <main className="setup-screen"><section className="setup-card"><BrandMark large /><h1>ไม่พบข้อมูลแพทย์</h1><p>กลับไปเลือกชื่อแพทย์จากหน้าแรก</p><button className="button button-quiet" onClick={() => apiClient.auth.signOut()}><LogOut size={16} />กลับหน้าแรก</button></section></main>
   return <Workspace session={session} profile={profile} />
 }
 
@@ -209,7 +209,7 @@ function Workspace({ session, profile }) {
         </button>
       })}</nav>
       <div className="sidebar-spacer" />
-      <div className="side-note"><div className="side-note-icon"><ShieldCheck size={16} /></div><div><strong>ข้อมูลปลอดภัย</strong><span>แสดงตามสิทธิ์บัญชี</span></div></div>
+      <div className="side-note"><div className="side-note-icon"><ShieldCheck size={16} /></div><div><strong>ข้อมูลตาราง</strong><span>ไม่มีข้อมูลผู้ป่วยในระบบ</span></div></div>
       <div className="side-user"><div className="avatar">{profile.display_name?.slice(0, 1) || 'ผ'}</div><div className="side-user-copy"><strong>{profile.display_name}</strong><span>{admin ? 'ผู้ดูแลระบบ' : data.physicians[0]?.display_name || 'แพทย์'}</span></div><button title="ออกจากระบบ" className="icon-button" onClick={() => apiClient.auth.signOut()}><LogOut size={17} /></button></div>
     </aside>
     {mobileNav && <button aria-label="ปิดเมนู" className="mobile-scrim" onClick={() => setMobileNav(false)} />}
@@ -269,12 +269,12 @@ function AdminOverview({ data, refresh, profile }) {
       <section className="panel task-panel"><div className="panel-header"><div><h2>งานที่ต้องติดตาม</h2><p>กรณีที่ต้องประสานกับแพทย์หรือบันทึกผล</p></div><span className={`count-pill ${tasks.length ? 'count-warn' : ''}`}>{tasks.length} รายการ</span></div>
         {tasks.length ? <div className="task-list">{tasks.slice(0, 6).map((task) => <div className="task-row" key={task.id}><div className={`task-icon ${task.tone}`}><task.icon size={17} /></div><div className="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></div><button className="button button-small button-outline" onClick={() => document.getElementById(`session-${task.session.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>ติดตาม</button></div>)}</div> : <EmptyState icon={CheckCheck} title="ไม่มีงานค้าง" description="รายการที่ต้องติดตามจะแสดงที่นี่" />}
       </section>
-      <section className="panel activity-panel"><div className="panel-header"><div><h2>เข้าใช้งานล่าสุด</h2><p>ช่วยติดตามกรณีแพทย์ไม่ได้เปิดเว็บ</p></div><span className="subtle-tag">อัปเดตอัตโนมัติขณะเปิดเว็บ</span></div>
+      <section className="panel activity-panel"><div className="panel-header"><div><h2>แพทย์เข้าเว็บล่าสุด</h2><p>ถ้ายังไม่เข้ามา พยาบาลติดตามได้จากรายการนี้</p></div><span className="subtle-tag">อัปเดตขณะเปิดเว็บ</span></div>
         <div className="last-active-list">{data.profiles.filter((p) => p.role === 'physician').slice(0, 7).map((p) => {
           const physician = data.physicians.find((item) => item.id === p.physician_id)
           const stale = !p.last_active_at || Date.now() - new Date(p.last_active_at).getTime() > 7 * 86400000
           return <div className="last-active-row" key={p.id}><div className="avatar avatar-small">{p.display_name?.slice(0, 1) || 'พ'}</div><div className="last-active-copy"><strong>{p.display_name}</strong><span>{physician?.display_name || 'ยังไม่ผูกแพทย์'}</span></div><div className={`active-time ${stale ? 'active-stale' : ''}`}><i />{p.last_active_at ? dateTimeText(p.last_active_at) : 'ยังไม่เคยเข้าเว็บ'}</div></div>
-        })}{!data.profiles.some((p) => p.role === 'physician') && <p className="empty-inline">ยังไม่มีบัญชีแพทย์ · เพิ่มแพทย์และกำหนดสิทธิ์ที่เมนู “แพทย์และตารางประจำ”</p>}</div>
+        })}{!data.profiles.some((p) => p.role === 'physician') && <p className="empty-inline">แพทย์เลือกชื่อจากหน้าแรกเมื่อเริ่มใช้ระบบ</p>}</div>
       </section>
     </div>
     <section className="panel upcoming-panel"><div className="panel-header"><div><h2>รอบตรวจถัดไป</h2><p>แสดงข้อมูลนัดรวมและการยืนยันของแพทย์</p></div><button className="text-button" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions'))}>ดูตารางทั้งหมด <ArrowRight size={15} /></button></div>
@@ -372,7 +372,7 @@ function SessionActionModal({ modal, doctors, profile, onClose, onSave }) {
   </section></div>
 }
 
-function AdminSetup({ data, refresh, session }) {
+function AdminSetup({ data, refresh }) {
   const [clinicName, setClinicName] = useState('')
   const [clinicShort, setClinicShort] = useState('')
   const [doctorName, setDoctorName] = useState('')
@@ -383,8 +383,6 @@ function AdminSetup({ data, refresh, session }) {
   const [quota, setQuota] = useState('20')
   const [slotError, setSlotError] = useState('')
   const [notice, setNotice] = useState('')
-  const [invite, setInvite] = useState({ email: '', display_name: '', physician_id: '' })
-  const [inviteError, setInviteError] = useState('')
   const [saving, setSaving] = useState(false)
   const [templateEdit, setTemplateEdit] = useState(null)
   const [physicianEdit, setPhysicianEdit] = useState(null)
@@ -437,15 +435,6 @@ function AdminSetup({ data, refresh, session }) {
     if (error) setSlotError(error.message); else { setPhysicianEdit(null); setNotice('ยืนยันชื่อแพทย์แล้ว'); await refresh() }
     setSaving(false)
   }
-  async function invitePhysician(e) {
-    e.preventDefault(); setSaving(true); setInviteError(''); setNotice('')
-    const { data: result, error } = await apiClient.functions.invoke('invite-user', {
-      body: { ...invite, redirect_to: window.location.origin + window.location.pathname },
-    })
-    if (error || result?.error) setInviteError(result?.error || error?.message || 'เพิ่มสิทธิ์ไม่สำเร็จ')
-    else { setNotice(`เพิ่มสิทธิ์ให้ ${invite.email} แล้ว · แจ้ง URL เว็บและให้เข้าสู่ระบบด้วย Google บัญชีนี้`); setInvite({ email: '', display_name: '', physician_id: '' }); await refresh() }
-    setSaving(false)
-  }
   const dow = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์']
   return <>
     <PageTitle eyebrow="จัดการข้อมูลตั้งต้น" title="แพทย์และตารางประจำ" description="แก้ข้อมูลคลินิก แพทย์ และวันออกตรวจประจำก่อนสร้างรอบตรวจจริง" />
@@ -456,13 +445,9 @@ function AdminSetup({ data, refresh, session }) {
         <div className="chip-list">{data.clinics.map((c, i) => <button type="button" className={`clinic-chip ${!c.is_active ? 'clinic-chip-inactive' : ''}`} key={c.id} onClick={() => toggleClinic(c)} title={c.is_active ? 'กดเพื่อปิดใช้คลินิก' : 'กดเพื่อเปิดใช้คลินิก'}><i className={`clinic-dot ${clinicColor[i % clinicColor.length]}`} />{c.name}<span>{c.is_active ? 'ใช้งาน' : 'ปิดใช้'}</span></button>)}</div>
         <form className="compact-form two-fields" onSubmit={addClinic}><label>ชื่อคลินิก<input required value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder="เช่น คลินิกผิวหนัง" /></label><label>ชื่อย่อ<input required value={clinicShort} onChange={(e) => setClinicShort(e.target.value)} placeholder="ชื่อย่อ" /></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มคลินิก</button></form>
       </section>
-      <section className="panel setup-panel"><div className="panel-header"><div><h2>เพิ่มข้อมูลแพทย์</h2><p>บันทึกชื่อแพทย์ก่อนผูกบัญชี Google</p></div><UserRound size={19} className="muted-icon" /></div>
+      <section className="panel setup-panel"><div className="panel-header"><div><h2>เพิ่มข้อมูลแพทย์</h2><p>แพทย์เลือกชื่อตัวเองจากหน้าแรกเพื่อเข้าดูตาราง</p></div><UserRound size={19} className="muted-icon" /></div>
         <form className="compact-form" onSubmit={addPhysician}><label>ชื่อที่แสดง<input required value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="คำนำหน้าและชื่อแพทย์" /></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มแพทย์</button></form>
         <div className="helper-line"><AlertCircle size={15} />ตรวจสอบชื่อในตารางภาพก่อนเปลี่ยน placeholder เป็นชื่อจริง</div>
-      </section>
-      <section className="panel setup-panel invite-panel"><div className="panel-header"><div><h2>กำหนดสิทธิ์แพทย์</h2><p>อนุญาตบัญชี Google และผูกบัญชีกับข้อมูลแพทย์หนึ่งท่าน</p></div><Bell size={19} className="muted-icon" /></div>
-        <form className="compact-form invite-form" onSubmit={invitePhysician}><label>บัญชี Google ของแพทย์<input type="email" required value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="doctor@example.org" /></label><label>ชื่อในระบบ<input required value={invite.display_name} onChange={(e) => setInvite({ ...invite, display_name: e.target.value })} placeholder="ชื่อที่แสดง" /></label><label>ผูกกับข้อมูลแพทย์<select required value={invite.physician_id} onChange={(e) => setInvite({ ...invite, physician_id: e.target.value })}><option value="">เลือกแพทย์</option>{activeDoctors.filter((p) => !p.is_placeholder && !data.profiles.some((profile) => profile.physician_id === p.id)).map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}</select></label><button className="button button-primary button-small" disabled={saving}>เพิ่มสิทธิ์เข้าเว็บ <ArrowRight size={15} /></button></form>
-        {inviteError && <div className="inline-error"><AlertCircle size={15} />{inviteError}</div>}
       </section>
     </div>
     <section className="panel template-panel"><div className="panel-header"><div><h2>ตารางเวรประจำ</h2><p>แยกจากรอบตรวจที่สร้างแล้ว การแก้ตารางนี้มีผลต่อรอบที่สร้างในอนาคตเท่านั้น</p></div><span className="subtle-tag">จ–ศ 16:00–20:00 · ส 08:00–12:00</span></div>
@@ -478,8 +463,8 @@ function AdminSetup({ data, refresh, session }) {
         const editing = physicianEdit?.id === p.id
         return <div className={`doctor-directory-card ${p.is_placeholder ? 'doctor-placeholder' : ''}`} key={p.id}>
           <div className="doctor-icon"><UserRound size={16} /></div>
-          <div className="doctor-directory-copy">{editing ? <input className="doctor-name-edit" value={physicianEdit.display_name} onChange={(e) => setPhysicianEdit({ ...physicianEdit, display_name: e.target.value })} aria-label="ชื่อแพทย์" /> : <strong>{p.display_name}</strong>}<span>{user ? `บัญชี: ${user.display_name}` : p.is_placeholder ? 'ชื่อรอยืนยัน' : 'ยังไม่มีบัญชีเข้าใช้'}</span></div>
-          <span className={`status-pill ${p.is_active ? p.is_placeholder ? 'status-amber' : 'status-green' : 'status-gray'}`}>{!p.is_active ? 'ปิดใช้' : p.is_placeholder ? 'รอยืนยัน' : user ? 'มีบัญชี' : 'ไม่มีบัญชี'}</span>
+          <div className="doctor-directory-copy">{editing ? <input className="doctor-name-edit" value={physicianEdit.display_name} onChange={(e) => setPhysicianEdit({ ...physicianEdit, display_name: e.target.value })} aria-label="ชื่อแพทย์" /> : <strong>{p.display_name}</strong>}<span>{user ? `เข้าเว็บล่าสุด ${dateTimeText(user.last_active_at)}` : p.is_placeholder ? 'ชื่อรอยืนยัน' : 'เลือกชื่อเพื่อเข้าใช้'}</span></div>
+          <span className={`status-pill ${p.is_active ? p.is_placeholder ? 'status-amber' : 'status-green' : 'status-gray'}`}>{!p.is_active ? 'ปิดใช้' : p.is_placeholder ? 'รอยืนยัน' : user ? 'เคยเข้าเว็บ' : 'พร้อมใช้'}</span>
           {editing ? <button className="text-button" disabled={saving} onClick={savePhysicianName}>บันทึก</button> : <button className="text-button" onClick={() => setPhysicianEdit({ id: p.id, display_name: p.display_name })}>{p.is_placeholder ? 'ยืนยันชื่อ' : 'แก้ชื่อ'}</button>}
           <button className="text-button" onClick={() => togglePhysician(p)}>{p.is_active ? 'ปิดใช้' : 'เปิดใช้'}</button>
         </div>

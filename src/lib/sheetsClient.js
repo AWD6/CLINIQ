@@ -1,13 +1,17 @@
 const bridgeUrl = import.meta.env.VITE_APPS_SCRIPT_URL
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const configured = Boolean(bridgeUrl && googleClientId && !bridgeUrl.includes('YOUR_') && !googleClientId.includes('YOUR_'))
-const SESSION_KEY = 'clinic-schedule-google-session'
+const configured = Boolean(bridgeUrl && !bridgeUrl.includes('YOUR_'))
+const SESSION_KEY = 'clinic-schedule-mode-session-v1'
 const pending = new Map()
 const queue = []
 const listeners = new Set()
 let frame
+let bridgeWindow
 let ready = false
 let bridgeOrigin = ''
+
+function trustedBridgeOrigin(origin) {
+  return origin === 'null' || origin === 'https://script.google.com' || /^https:\/\/(?:[^/]+\.)?script\.googleusercontent\.com$/.test(origin)
+}
 
 function readSession() {
   try {
@@ -24,28 +28,45 @@ function notifyAuth(event, session) {
 }
 
 function ensureBridge() {
-  if (!configured) throw new Error('ยังไม่ได้ตั้งค่า Apps Script URL หรือ Google Client ID')
+  if (!configured) throw new Error('ยังไม่ได้ตั้งค่า Apps Script URL')
   if (frame) return
   frame = document.createElement('iframe')
-  frame.title = 'Google Sheets secure data bridge'
+  frame.title = 'Google Sheets data bridge'
   frame.setAttribute('aria-hidden', 'true')
   Object.assign(frame.style, { position: 'fixed', width: '1px', height: '1px', left: '-10px', bottom: '0', opacity: '0', border: '0', pointerEvents: 'none' })
   frame.src = bridgeUrl
   document.body.appendChild(frame)
 }
 
+function isNestedBridgeSource(source) {
+  try {
+    const nestedFrames = frame?.contentWindow?.frames
+    if (!nestedFrames) return false
+    for (let index = 0; index < nestedFrames.length; index++) {
+      if (nestedFrames[index] === source) return true
+    }
+  } catch { return false }
+  return false
+}
+
 function sendQueued() {
-  if (!ready || !frame?.contentWindow) return
-  while (queue.length) frame.contentWindow.postMessage(queue.shift(), bridgeOrigin)
+  if (!ready || !bridgeWindow) return
+  while (queue.length) bridgeWindow.postMessage(queue.shift(), '*')
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('message', (event) => {
-    if (!frame || event.source !== frame.contentWindow) return
+    if (!frame) return
     const message = event.data || {}
-    const trustedBridge = event.origin === 'https://script.google.com' || /^https:\/\/(?:[^/]+\.)?script\.googleusercontent\.com$/.test(event.origin)
-    if (message.type === 'bridge-ready' && trustedBridge) { bridgeOrigin = event.origin; ready = true; sendQueued(); return }
-    if (!trustedBridge || event.origin !== bridgeOrigin) return
+    if (message.type === 'bridge-ready') {
+      if (!trustedBridgeOrigin(event.origin) || !isNestedBridgeSource(event.source)) return
+      bridgeWindow = event.source
+      bridgeOrigin = event.origin
+      ready = true
+      sendQueued()
+      return
+    }
+    if (!ready || event.source !== bridgeWindow || event.origin !== bridgeOrigin) return
     if (message.type !== 'response' || !pending.has(message.id)) return
     const { resolve, reject, timer } = pending.get(message.id)
     window.clearTimeout(timer)
@@ -68,7 +89,7 @@ function request(action, payload = {}, token = readSession()?.access_token) {
     const timer = window.setTimeout(() => { pending.delete(id); const index = queue.findIndex((item) => item.id === id); if (index >= 0) queue.splice(index, 1); reject(new Error('เชื่อมต่อ Google Sheets ไม่สำเร็จ กรุณาลองโหลดหน้าใหม่')) }, 30000)
     pending.set(id, { resolve, reject, timer })
     const message = { type: 'request', id, action, payload, credential: token || '' }
-    if (ready && frame?.contentWindow) frame.contentWindow.postMessage(message, bridgeOrigin)
+    if (ready && bridgeWindow) bridgeWindow.postMessage(message, '*')
     else queue.push(message)
   })
 }
@@ -99,10 +120,10 @@ export const apiClient = {
   auth: {
     async getSession() { return { data: { session: readSession() }, error: null } },
     onAuthStateChange(callback) { listeners.add(callback); return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } } },
-    async signInWithIdToken({ token }) {
+    async enterRole({ role, physician_id = null }) {
       try {
-        const result = await request('whoami', {}, token)
-        const user = { id: result.profile.id, email: result.profile.email }
+        const result = await request('start', { role, physician_id }, '')
+        const user = { id: result.profile.id }
         const session = { access_token: result.sessionToken, user }
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
         notifyAuth('SIGNED_IN', session)
@@ -116,12 +137,8 @@ export const apiClient = {
     try { return { data: await request('rpc', { name, args }), error: null } }
     catch (error) { return { data: null, error } }
   },
-  functions: {
-    async invoke(name, options = {}) {
-      try { return { data: await request('function', { name, body: options.body || {} }), error: null } }
-      catch (error) { return { data: null, error } }
-    },
+  async listPhysicians() {
+    try { return { data: await request('directory', {}, ''), error: null } }
+    catch (error) { return { data: null, error } }
   },
 }
-
-export { googleClientId }

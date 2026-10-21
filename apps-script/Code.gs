@@ -25,61 +25,85 @@ function doGet() {
 
 function apiCall(action, payload, credential) {
   try {
-    const identity = action === 'whoami' ? verifyGoogleCredential_(credential) : verifySessionToken_(credential);
+    if (action === 'directory') return { data: publicPhysicians_() };
+    if (action === 'start') return { data: startRoleSession_(payload || {}) };
+    const identity = verifySessionToken_(credential);
     const user = getAuthorizedUser_(identity);
-    if (action === 'whoami') return { data: { profile: publicUser_(user), sessionToken: issueSessionToken_(identity) } };
     touchLastActive_(user);
     generateDueNotifications_(user);
     if (action === 'query') return { data: query_(user, payload || {}) };
     if (action === 'rpc') return { data: rpc_(user, payload || {}) };
-    if (action === 'function') return { data: appFunction_(user, payload || {}) };
     throw new Error('ไม่รู้จักคำสั่งนี้');
   } catch (error) {
     return { error: String(error && error.message ? error.message : error) };
   }
 }
 
-function verifyGoogleCredential_(idToken) {
-  if (!idToken) throw new Error('กรุณาเข้าสู่ระบบด้วย Google');
-  const clientId = APP.properties.getProperty('GOOGLE_CLIENT_ID');
-  if (!clientId) throw new Error('ผู้ดูแลระบบยังไม่ได้ตั้งค่า GOOGLE_CLIENT_ID ใน Apps Script');
-  const response = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo', {
-    method: 'post', payload: { id_token: idToken }, muteHttpExceptions: true,
-  });
-  if (response.getResponseCode() !== 200) throw new Error('การยืนยันบัญชี Google หมดอายุหรือไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่');
-  const claims = JSON.parse(response.getContentText());
-  const expiry = Number(claims.exp || 0) * 1000;
-  if (claims.aud !== clientId || !['accounts.google.com','https://accounts.google.com'].includes(claims.iss) || expiry <= Date.now() || claims.email_verified !== 'true' || !claims.email || !claims.sub) {
-    throw new Error('บัญชี Google ไม่ผ่านการตรวจสอบ');
+function publicPhysicians_() {
+  return records_('Physicians').filter(function(row) { return row.is_active && !row.is_placeholder; })
+    .map(function(row) { return { id: row.id, display_name: row.display_name }; })
+    .sort(function(a,b) { return a.display_name.localeCompare(b.display_name, 'th'); });
+}
+
+// Role selection creates a short server-signed session; it does not verify a person's identity.
+function startRoleSession_(request) {
+  const role = String(request.role || '');
+  let user;
+  if (role === 'admin') {
+    user = records_('Users').find(function(row) { return row.role === 'admin' && row.is_active; });
+    if (!user) throw new Error('ยังไม่มีผู้ดูแลในชีต Users กรุณาให้ผู้ดูแลเพิ่มข้อมูลก่อน');
+  } else if (role === 'physician') {
+    const physicianId = String(request.physician_id || '');
+    const physician = records_('Physicians').find(function(row) { return row.id === physicianId && row.is_active && !row.is_placeholder; });
+    if (!physician) throw new Error('ไม่พบชื่อแพทย์ที่เลือก หรือชื่อนี้ยังรอยืนยัน');
+    user = records_('Users').find(function(row) { return row.role === 'physician' && row.physician_id === physicianId; });
+    if (user && !user.is_active) throw new Error('ข้อมูลแพทย์นี้ถูกปิดใช้งาน กรุณาติดต่อผู้ดูแล');
+    if (!user) {
+      user = {
+        id: 'mode-physician-' + physician.id,
+        display_name: physician.display_name,
+        role: 'physician', physician_id: physician.id, is_active: true,
+        last_active_at: null, created_at: new Date().toISOString(),
+      };
+      appendRecord_('Users', user);
+    }
+  } else {
+    throw new Error('กรุณาเลือกหน้าใช้งาน');
   }
-  return { sub: String(claims.sub), email: String(claims.email).trim().toLowerCase() };
+
+  if (!user.id) {
+    user.id = role === 'admin' ? 'mode-admin' : 'mode-physician-' + user.physician_id;
+    writeFields_('Users', user._row, { id: user.id });
+  }
+  const identity = { sub: String(user.id) };
+  return { profile: publicUser_(user), sessionToken: issueSessionToken_(identity) };
 }
 
 function issueSessionToken_(identity) {
   const now = Math.floor(Date.now() / 1000);
   const header = base64UrlEncode_(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const claims = base64UrlEncode_(JSON.stringify({ iss: 'clinic-schedule-appscript', sub: identity.sub, email: identity.email, iat: now, exp: now + 8 * 60 * 60 }));
+  const claims = base64UrlEncode_(JSON.stringify({ iss: 'clinic-schedule-appscript', sub: identity.sub, iat: now, exp: now + 8 * 60 * 60 }));
   const signingInput = header + '.' + claims;
   const signature = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(signingInput, sessionSecret_)).replace(/=+$/, '');
   return signingInput + '.' + signature;
 }
 
 function verifySessionToken_(token) {
-  if (!token) throw new Error('กรุณาเข้าสู่ระบบด้วย Google');
+  if (!token) throw new Error('กรุณาเลือกหน้าใช้งานใหม่');
   const parts = String(token).split('.');
   if (parts.length !== 3) throw new Error('session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่');
   const input = parts[0] + '.' + parts[1];
   const expected = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(input, sessionSecret_)).replace(/=+$/, '');
-  if (!constantTimeEqual_(parts[2], expected)) throw new Error('session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่');
+  if (!constantTimeEqual_(parts[2], expected)) throw new Error('session ไม่ถูกต้อง กรุณาเลือกหน้าใช้งานใหม่');
   let header; let claims;
   try {
     header = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString());
     claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[1])).getDataAsString());
-  } catch (_) { throw new Error('session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่'); }
-  if (header.alg !== 'HS256' || claims.iss !== 'clinic-schedule-appscript' || Number(claims.exp) <= Math.floor(Date.now() / 1000) || !claims.sub || !claims.email) {
-    throw new Error('session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+  } catch (_) { throw new Error('session ไม่ถูกต้อง กรุณาเลือกหน้าใช้งานใหม่'); }
+  if (header.alg !== 'HS256' || claims.iss !== 'clinic-schedule-appscript' || Number(claims.exp) <= Math.floor(Date.now() / 1000) || !claims.sub) {
+    throw new Error('session หมดอายุ กรุณาเลือกหน้าใช้งานใหม่');
   }
-  return { sub: String(claims.sub), email: String(claims.email).toLowerCase() };
+  return { sub: String(claims.sub) };
 }
 
 function sessionSecret_() {
@@ -107,19 +131,18 @@ function constantTimeEqual_(left, right) {
 
 function getAuthorizedUser_(identity) {
   const users = records_('Users');
-  const match = users.find(function(row) { return String(row.email || '').trim().toLowerCase() === identity.email; });
-  if (!match || match.is_active !== true) throw new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าเว็บ โปรดติดต่อพยาบาลผู้ดูแล');
+  const match = users.find(function(row) { return String(row.id || '') === identity.sub; });
+  if (!match || match.is_active !== true) throw new Error('ไม่พบหน้าใช้งานนี้ กรุณาเลือกใหม่');
   if (!['admin','physician'].includes(match.role)) throw new Error('บัญชีนี้ไม่มีบทบาทที่ใช้งานได้');
-  if (match.role === 'physician' && !match.physician_id) throw new Error('บัญชีนี้ยังไม่ได้ผูกกับข้อมูลแพทย์');
-  if (match.id && String(match.id) !== identity.sub) throw new Error('Google account ID ไม่ตรงกับบัญชีที่อนุมัติไว้');
+  if (match.role === 'physician' && !match.physician_id) throw new Error('ไม่พบข้อมูลแพทย์ กรุณาเลือกชื่อใหม่');
+  if (match.id && String(match.id) !== identity.sub) throw new Error('ข้อมูล session ไม่ตรงกับหน้าใช้งานที่เลือก');
   if (!match.id) writeFields_('Users', match._row, { id: identity.sub });
   match.id = identity.sub;
-  match.email = identity.email;
   return match;
 }
 
 function publicUser_(row) {
-  return { id: row.id, email: row.email, display_name: row.display_name, role: row.role, physician_id: row.physician_id || null, is_active: row.is_active === true, last_active_at: row.last_active_at || null };
+  return { id: row.id, display_name: row.display_name, role: row.role, physician_id: row.physician_id || null, is_active: row.is_active === true, last_active_at: row.last_active_at || null };
 }
 
 function touchLastActive_(user) {
@@ -146,7 +169,7 @@ function query_(user, request) {
     });
   });
   const max = Math.min(1000, Math.max(1, Number(request.limit || 1000)));
-  rows = rows.slice(0, max).map(stripInternal_);
+  rows = rows.slice(0, max).map(function(row) { return table === 'user_profiles' ? publicUser_(row) : stripInternal_(row); });
   return request.maybeSingle ? (rows[0] || null) : rows;
 }
 
@@ -290,7 +313,7 @@ function loadWorkspace_(user) {
       templates: readableRows_(user, 'schedule_templates').sort(function(a,b) { return Number(a.weekday)-Number(b.weekday) || String(a.start_time).localeCompare(String(b.start_time)); }).map(stripInternal_),
       sessions: sessions, notifications: notifications,
       events: records_('ActivityEvents').sort(function(a,b) { return String(b.created_at).localeCompare(String(a.created_at)); }).slice(0,100).map(stripInternal_),
-      profiles: records_('Users').map(stripInternal_),
+      profiles: records_('Users').map(publicUser_),
     };
   }
   return { clinics: clinics.map(stripInternal_), physicians: physicians.map(stripInternal_), templates: [], sessions: sessions, notifications: notifications, events: [], profiles: [] };
@@ -366,28 +389,6 @@ function respondToSession_(user, sessionId, response, note) {
   return null;
 }
 
-function appFunction_(user, request) {
-  requireAdmin_(user);
-  if (request.name !== 'invite-user') throw new Error('ไม่รู้จักคำสั่งนี้');
-  const body = request.body || {};
-  const email = String(body.email || '').trim().toLowerCase();
-  const name = String(body.display_name || '').trim();
-  const physicianId = String(body.physician_id || '').trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name || !physicianId) throw new Error('กรุณาระบุอีเมล ชื่อ และแพทย์ให้ครบ');
-  if (!records_('Physicians').some(function(p) { return p.id === physicianId && p.is_active && !p.is_placeholder; })) throw new Error('เลือกข้อมูลแพทย์ที่ใช้งานได้');
-  const users = records_('Users');
-  const emailMatch = users.find(function(row) { return String(row.email || '').toLowerCase() === email; });
-  const physicianMatch = users.find(function(row) { return row.role === 'physician' && row.physician_id === physicianId && row.email.toLowerCase() !== email; });
-  if (physicianMatch) throw new Error('ข้อมูลแพทย์นี้ผูกกับบัญชีอื่นอยู่แล้ว');
-  if (emailMatch && emailMatch.role === 'physician' && emailMatch.physician_id !== physicianId) throw new Error('บัญชีนี้ผูกกับข้อมูลแพทย์รายการอื่นอยู่แล้ว');
-  const profile = { id: emailMatch ? emailMatch.id : '', email: email, display_name: name, role: 'physician', physician_id: physicianId, is_active: true, last_active_at: emailMatch ? emailMatch.last_active_at : null, created_at: emailMatch ? emailMatch.created_at : new Date().toISOString() };
-  if (emailMatch && emailMatch.role === 'admin') throw new Error('อีเมลนี้เป็นบัญชีผู้ดูแลระบบอยู่แล้ว');
-  if (emailMatch) writeFields_('Users', emailMatch._row, profile);
-  else appendRecord_('Users', profile);
-  logEvent_(user, emailMatch ? 'update' : 'insert', 'Users', email, emailMatch ? stripInternal_(emailMatch) : null, profile);
-  return { ok: true, email: email, notice: 'เพิ่มสิทธิ์แล้ว ผู้ใช้ต้องเข้าสู่ระบบด้วย Google บัญชีนี้' };
-}
-
 function notifyAssignment_(session) {
   const targets = records_('Users').filter(function(row) { return row.role === 'physician' && row.physician_id === session.physician_id && row.is_active; });
   targets.forEach(function(target) {
@@ -452,7 +453,7 @@ function records_(name) {
     const row = { _row: index + 2 };
     headers.forEach(function(key, column) { row[key] = parseCell_(key, line[column]); });
     return row;
-  }).filter(function(row) { return row.id || row.email; });
+  }).filter(function(row) { return row.id || row.email || (name === 'Users' && row.display_name && row.role); });
 }
 
 function parseCell_(key, value) {

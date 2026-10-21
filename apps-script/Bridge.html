@@ -4,18 +4,18 @@
   <body>
     <script>
       window.addEventListener('message', function(event) {
-        if (event.source !== parent || !event.data || event.data.type !== 'request') return;
+        if (event.source !== window.top || !event.data || event.data.type !== 'request') return;
         var message = event.data;
         google.script.run
           .withSuccessHandler(function(result) {
-            parent.postMessage({ type: 'response', id: message.id, data: result && result.data, error: result && result.error }, '*');
+            window.top.postMessage({ type: 'response', id: message.id, data: result && result.data, error: result && result.error }, '*');
           })
           .withFailureHandler(function(error) {
-            parent.postMessage({ type: 'response', id: message.id, error: String(error && error.message || error) }, '*');
+            window.top.postMessage({ type: 'response', id: message.id, error: String(error && error.message || error) }, '*');
           })
           .apiCall(message.action, message.payload || {}, message.credential || '');
       });
-      parent.postMessage({ type: 'bridge-ready' }, '*');
+      window.top.postMessage({ type: 'bridge-ready' }, '*');
     </script>
   </body>
 </html>
