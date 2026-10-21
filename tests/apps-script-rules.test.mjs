@@ -73,6 +73,27 @@ test('generates repeat-safe sessions only for active, confirmed physicians', () 
   assert.equal(tables.Sessions.length, 2)
 })
 
+test('enforces the 30-day session generation limit on the server', () => {
+  const { context } = createHarness()
+  const nurse = { id: 'admin', role: 'admin' }
+
+  assert.equal(context.generateSessions_(nurse, '2026-10-20', '2026-11-19'), 0)
+  assert.throws(() => context.generateSessions_(nurse, '2026-10-20', '2026-11-20'), /ไม่เกิน 30 วัน/)
+  assert.throws(() => context.generateSessions_(nurse, '2026-10-19', '2026-10-20'), /ไม่เกิน 30 วัน/)
+})
+
+test('loads dashboard data and signed-in profile together', () => {
+  const { context } = createHarness()
+  const nurse = { id: 'admin', role: 'admin', display_name: 'พยาบาล', is_active: true }
+
+  const workspace = context.rpc_(nurse, { name: 'load_workspace' })
+
+  assert.equal(workspace.profile.id, 'admin')
+  assert.equal(workspace.profile.role, 'admin')
+  assert.equal(workspace.clinics.length, 1)
+  assert.ok(Array.isArray(workspace.sessions))
+})
+
 test('creates one in-app reminder at 7, 3, and 1 days and skips placeholders', () => {
   const { context, tables } = createHarness()
   tables.Users.push(

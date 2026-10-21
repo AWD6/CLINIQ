@@ -30,7 +30,6 @@ function apiCall(action, payload, credential) {
     const identity = verifySessionToken_(credential);
     const user = getAuthorizedUser_(identity);
     touchLastActive_(user);
-    generateDueNotifications_(user);
     if (action === 'query') return { data: query_(user, payload || {}) };
     if (action === 'rpc') return { data: rpc_(user, payload || {}) };
     throw new Error('ไม่รู้จักคำสั่งนี้');
@@ -305,12 +304,11 @@ function canChangeRow_(user, table, row) {
 
 function rpc_(user, request) {
   const args = request.args || {};
-  if (request.name === 'load_workspace') return loadWorkspace_(user);
+  if (request.name === 'load_workspace') { generateDueNotifications_(user); return loadWorkspace_(user); }
   if (request.name === 'touch_last_active') { touchLastActive_(user); return null; }
-  if (request.name === 'generate_due_notifications') { generateDueNotifications_(user); return null; }
   if (request.name === 'generate_schedule_sessions') {
     requireAdmin_(user);
-    return generateSessions_(user, args.p_from || bangkokToday_(), args.p_to || addDays_(bangkokToday_(), 90));
+    return generateSessions_(user, args.p_from || bangkokToday_(), args.p_to || addDays_(bangkokToday_(), 30));
   }
   if (request.name === 'respond_to_session') return respondToSession_(user, args.p_session_id, args.p_response, args.p_note);
   throw new Error('ไม่รู้จักคำสั่งนี้');
@@ -335,6 +333,7 @@ function loadWorkspace_(user) {
   const notifications = readableRows_(user, 'notifications').sort(function(a,b) { return String(b.created_at).localeCompare(String(a.created_at)); }).slice(0,100).map(stripInternal_);
   if (user.role === 'admin') {
     return {
+      profile: publicUser_(user),
       clinics: clinics.map(stripInternal_), physicians: physicians.map(stripInternal_),
       templates: readableRows_(user, 'schedule_templates').sort(function(a,b) { return Number(a.weekday)-Number(b.weekday) || String(a.start_time).localeCompare(String(b.start_time)); }).map(stripInternal_),
       sessions: sessions, notifications: notifications,
@@ -342,11 +341,12 @@ function loadWorkspace_(user) {
       profiles: records_('Users').map(publicUser_),
     };
   }
-  return { clinics: clinics.map(stripInternal_), physicians: physicians.map(stripInternal_), templates: [], sessions: sessions, notifications: notifications, events: [], profiles: [] };
+  return { profile: publicUser_(user), clinics: clinics.map(stripInternal_), physicians: physicians.map(stripInternal_), templates: [], sessions: sessions, notifications: notifications, events: [], profiles: [] };
 }
 
 function generateSessions_(user, fromDate, toDate) {
-  if (fromDate > toDate || fromDate < '2000-01-01' || toDate > addDays_(fromDate, 370)) throw new Error('ช่วงวันที่สร้างรอบตรวจไม่ถูกต้อง');
+  const today = bangkokToday_();
+  if (fromDate > toDate || fromDate < today || toDate > addDays_(today, 30)) throw new Error('สร้างรอบตรวจได้ล่วงหน้าไม่เกิน 30 วัน');
   let count = 0;
   const lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {

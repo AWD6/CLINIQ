@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, Bell, CalendarDays,
   Check, CheckCheck, ChevronDown, Clock3, LogOut, Menu, Plus,
-  RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Stethoscope, UserRound, Users,
+  RefreshCw, Settings2, ShieldCheck, Sparkles, Stethoscope, UserRound, Users,
   X, XCircle,
 } from 'lucide-react'
 import { isConfigured, apiClient } from './lib/sheetsClient'
@@ -10,7 +10,7 @@ import { isConfigured, apiClient } from './lib/sheetsClient'
 const BANGKOK = 'Asia/Bangkok'
 const clinicColor = ['teal', 'blue', 'rose', 'amber', 'violet', 'cyan']
 const navAdmin = [
-  { id: 'overview', label: 'ภาพรวม', icon: Activity },
+  { id: 'overview', label: 'Dashboard', icon: Activity },
   { id: 'sessions', label: 'ตารางและการติดตาม', icon: CalendarDays },
   { id: 'setup', label: 'แพทย์และตารางประจำ', icon: Users },
   { id: 'history', label: 'ประวัติการแก้ไข', icon: Clock3 },
@@ -63,7 +63,7 @@ function ConfigNotice() {
 function BrandMark({ large = false }) {
   return <div className={`brand-mark ${large ? 'brand-mark-large' : ''}`}>
     <div className="brand-symbol"><Stethoscope size={large ? 28 : 20} strokeWidth={2.3} /></div>
-    <div><strong>CLINIQ</strong><span>คลินิกเฉพาะทางนอกเวลา · มหาราชนครเชียงใหม่</span></div>
+    <div><strong>CLINIQ</strong><span>คลินิกเฉพาะทางนอกเวลา · โรงพยาบาลมหาราชนครเชียงใหม่</span></div>
   </div>
 }
 
@@ -108,7 +108,6 @@ function Login() {
     </div>
     <section className="login-panel"><div className="login-inner"><BrandMark />
       <div className="welcome"><div className="eyebrow">ตารางเวรพร้อมแล้ว ✨</div><h2>{mode === 'choose' ? 'เข้าใช้งานแบบไหน?' : 'เลือกชื่อแพทย์'}</h2><p>{mode === 'choose' ? 'แตะเลือกเพื่อไปยังหน้าที่ต้องการ' : 'ตารางและการแจ้งเตือนจะแสดงเฉพาะชื่อที่เลือก'}</p></div>
-      <div className="credit-banner"><span className="credit-sparkle"><Sparkles size={17} /></span><span className="credit-copy"><small>MADE WITH CARE · CLINIQ</small><span>conceived, designed and Brought to life by</span><strong>RN.Patipon Wiyo</strong></span><span className="credit-sparkle"><Sparkles size={13} /></span></div>
       {mode === 'choose' ? <div className="entry-choice-grid">
         <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>พยาบาล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบกลับ</small></span><ArrowRight size={18} /></button>
         <button className="entry-role-card entry-doctor" onClick={() => setMode('physician')} disabled={busy}><span className="entry-role-icon"><Stethoscope size={22} /></span><span><strong>แพทย์</strong><small>ดูตาราง · ยืนยัน · แจ้งติดภารกิจ</small></span><ArrowRight size={18} /></button>
@@ -128,6 +127,7 @@ function Login() {
         {!loadingDoctors && !error && physicians.length === 0 && <div className="empty-doctor-list">ยังไม่พบรายชื่ออาจารย์ กรุณากดโหลดหน้าใหม่</div>}
         <div className="doctor-entry-actions"><button className="button button-quiet" onClick={() => { setMode('choose'); setError('') }}>ย้อนกลับ</button><button className="button button-primary" disabled={!physicianId || busy} onClick={() => enter('physician', physicianId)}>{busy ? 'กำลังเปิด…' : 'ไปที่ตารางของฉัน'}<ArrowRight size={16} /></button></div>
       </div>}
+      <div className="credit-banner"><Sparkles className="credit-sparkle-icon" size={14} /><span className="credit-copy"><span>conceived, designed and brought to life by</span><strong>RN.Patipon Wiyo</strong></span></div>
       {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังเปิดหน้าทำงาน…</div>}
       {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
       <div className="login-foot">ข้อมูลนี้ทำเพื่อเตรียมความพร้อมของห้องตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
@@ -138,6 +138,7 @@ function Login() {
 function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [initialData, setInitialData] = useState(null)
   const [authBusy, setAuthBusy] = useState(true)
   const [profileError, setProfileError] = useState('')
 
@@ -146,19 +147,19 @@ function App() {
     let alive = true
     apiClient.auth.getSession().then(({ data }) => { if (alive) { setSession(data.session); setAuthBusy(false) } })
     const { data: listener } = apiClient.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession); setProfile(null); setProfileError(''); setAuthBusy(false)
+      setSession(nextSession); setProfile(null); setInitialData(null); setProfileError(''); setAuthBusy(false)
     })
     return () => { alive = false; listener.subscription.unsubscribe() }
   }, [])
 
   useEffect(() => {
     let alive = true
-    if (!session?.user) { setProfile(null); return }
-    apiClient.from('user_profiles').select('*').eq('id', session.user.id).maybeSingle()
+    if (!session?.user) { setProfile(null); setInitialData(null); return }
+    apiClient.rpc('load_workspace')
       .then(({ data, error }) => {
         if (!alive) return
-        if (error || !data || !data.is_active) setProfileError('เปิดข้อมูลไม่สำเร็จ กรุณากลับไปเลือกหน้าใช้งานใหม่')
-        else setProfile(data)
+        if (error || !data?.profile || !data.profile.is_active) setProfileError(error?.message || 'เปิดข้อมูลไม่สำเร็จ กรุณากลับไปเลือกหน้าใช้งานใหม่')
+        else { setProfile(data.profile); setInitialData(data) }
       })
     return () => { alive = false }
   }, [session])
@@ -169,42 +170,61 @@ function App() {
   if (profileError) return <main className="setup-screen"><section className="setup-card"><BrandMark large /><div className="inline-error centered"><AlertCircle size={19} />{profileError}</div><button className="button button-quiet" onClick={() => apiClient.auth.signOut()}><LogOut size={16} />ออกจากระบบ</button></section></main>
   if (!profile) return <div className="loading-screen"><div className="spinner" /><span>กำลังโหลดตาราง…</span></div>
   if (profile.role === 'physician' && !profile.physician_id) return <main className="setup-screen"><section className="setup-card"><BrandMark large /><h1>ไม่พบข้อมูลแพทย์</h1><p>กลับไปเลือกชื่อแพทย์จากหน้าแรก</p><button className="button button-quiet" onClick={() => apiClient.auth.signOut()}><LogOut size={16} />กลับหน้าแรก</button></section></main>
-  return <Workspace session={session} profile={profile} />
+  return <Workspace session={session} profile={profile} initialData={initialData} />
 }
 
-function Workspace({ session, profile }) {
+function Workspace({ session, profile, initialData }) {
   const admin = profile.role === 'admin'
   const nav = admin ? navAdmin : navDoctor
   const [tab, setTab] = useState('overview')
-  const [data, setData] = useState({ clinics: [], physicians: [], templates: [], sessions: [], notifications: [], events: [], profiles: [] })
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState(initialData || { clinics: [], physicians: [], templates: [], sessions: [], notifications: [], events: [], profiles: [] })
+  const [loading, setLoading] = useState(!initialData)
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [mobileNav, setMobileNav] = useState(false)
+  const [focusSessionId, setFocusSessionId] = useState('')
+  const refreshRequest = useRef(null)
 
   const refresh = useCallback(async (quiet = false) => {
+    if (refreshRequest.current) return refreshRequest.current
     if (!quiet) setLoading(true)
     else setRefreshing(true)
     setError('')
-    try {
-      await apiClient.rpc('generate_due_notifications')
-      const { data: next, error: workspaceError } = await apiClient.rpc('load_workspace')
-      if (workspaceError) throw workspaceError
-      setData(next)
-    } catch (loadError) {
-      setError(loadError.message || 'โหลดข้อมูลไม่สำเร็จ')
-    } finally { setLoading(false); setRefreshing(false) }
-  }, [admin, profile.physician_id])
+    const request = (async () => {
+      try {
+        const { data: next, error: workspaceError } = await apiClient.rpc('load_workspace')
+        if (workspaceError) throw workspaceError
+        setData(next)
+      } catch (loadError) {
+        setError(loadError.message || 'โหลดข้อมูลไม่สำเร็จ')
+      } finally {
+        setLoading(false); setRefreshing(false); refreshRequest.current = null
+      }
+    })()
+    refreshRequest.current = request
+    return request
+  }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { if (!initialData) refresh() }, [refresh, initialData])
   useEffect(() => {
-    const timer = window.setInterval(() => refresh(true), 30_000)
-    const activityTimer = window.setInterval(() => apiClient.rpc('touch_last_active'), 60_000)
-    apiClient.rpc('touch_last_active')
-    return () => { window.clearInterval(timer); window.clearInterval(activityTimer) }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refresh(true)
+    }, 60_000)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh(true)
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [refresh])
   useEffect(() => {
-    const openSessions = () => { if (admin) setTab('sessions') }
+    const openSessions = (event) => {
+      if (!admin) return
+      setFocusSessionId(event.detail?.sessionId || '')
+      setTab('sessions')
+    }
     const openNotifications = () => { if (!admin) setTab('notifications') }
     window.addEventListener('open-admin-sessions', openSessions)
     window.addEventListener('go-notifications', openNotifications)
@@ -239,7 +259,7 @@ function Workspace({ session, profile }) {
       <main className="content-area">
         {error && <div className="page-alert"><AlertCircle size={17} /><span>{error}</span><button className="text-button" onClick={() => refresh()}>ลองอีกครั้ง</button></div>}
         {loading ? <div className="content-loading"><div className="spinner" /><span>กำลังโหลดข้อมูล</span></div> : admin
-          ? <AdminContent tab={activeTab} data={data} refresh={() => refresh(true)} session={session} profile={profile} />
+          ? <AdminContent tab={activeTab} data={data} refresh={() => refresh(true)} session={session} profile={profile} focusSessionId={focusSessionId} clearFocusSession={() => setFocusSessionId('')} />
           : <DoctorContent tab={activeTab} data={data} refresh={() => refresh(true)} profile={profile} />}
       </main>
           <footer className="page-footer"><span>CLINIQ · ข้อมูลอัปเดตเมื่อเปิดหน้าเว็บ</span><span>conceived, designed and Brought to life by RN.Patipon Wiyo · เวลาไทย</span></footer>
@@ -255,8 +275,8 @@ function StatCard({ label, value, note, icon: Icon, tone = 'teal' }) {
   return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon size={19} /></div><div className="stat-copy"><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div></div>
 }
 
-function AdminContent({ tab, data, refresh, session, profile }) {
-  if (tab === 'sessions') return <AdminSessions data={data} refresh={refresh} profile={profile} />
+function AdminContent({ tab, data, refresh, session, profile, focusSessionId, clearFocusSession }) {
+  if (tab === 'sessions') return <AdminSessions data={data} refresh={refresh} profile={profile} focusSessionId={focusSessionId} clearFocusSession={clearFocusSession} />
   if (tab === 'setup') return <AdminSetup data={data} refresh={refresh} session={session} />
   if (tab === 'history') return <AdminHistory data={data} />
   return <AdminOverview data={data} refresh={refresh} profile={profile} />
@@ -276,8 +296,8 @@ function AdminOverview({ data, refresh, profile }) {
     ...awaiting.map((s) => ({ id: `await-${s.id}`, icon: Clock3, tone: 'amber', title: `ใกล้วันตรวจแต่ยังไม่ยืนยัน · ${physicianMap.get(s.physician_id) || 'แพทย์'}`, detail: `${clinicMap.get(s.clinic_id)} · ${dateText(s.session_date, { day: 'numeric', month: 'short' })}`, session: s })),
   ]
   return <>
-    <PageTitle eyebrow="แดชบอร์ดพยาบาล" title={`สวัสดี, ${profile.display_name}`} description="ติดตามตารางออกตรวจ การยืนยัน และงานที่ต้องประสาน" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจล่วงหน้า 90 วัน</button>} />
-    <div className="welcome-strip"><div><span className="welcome-icon"><CalendarDays size={20} /></span><div><strong>วันนี้ {dateText(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><small>รอบตรวจที่กำหนดไว้จะสร้างจากตารางประจำโดยไม่ซ้ำกัน</small></div></div><button className="button button-outline" onClick={() => generateNextSessions(refresh)}><RefreshCw size={16} />สร้างตาราง</button></div>
+    <PageTitle eyebrow="แดชบอร์ดพยาบาล" title="Dashboard" description="ดูตาราง ยอดนัด และรายการที่ต้องติดตาม" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจล่วงหน้า 30 วัน</button>} />
+    <div className="welcome-strip"><div><span className="welcome-icon"><CalendarDays size={20} /></span><div><strong>วันนี้ {dateText(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><small>สร้างรอบจากตารางประจำได้ไม่เกิน 30 วัน</small></div></div><button className="button button-outline" onClick={() => generateNextSessions(refresh)}><RefreshCw size={16} />สร้างตาราง</button></div>
     <div className="stats-grid">
       <StatCard label="รอบตรวจ 30 วัน" value={upcoming30.length} note="ทุกคลินิก" icon={CalendarDays} tone="teal" />
       <StatCard label="รอยืนยันใกล้ถึงวัน" value={awaiting.length} note="ภายใน 3 วัน" icon={Clock3} tone="amber" />
@@ -286,7 +306,7 @@ function AdminOverview({ data, refresh, profile }) {
     </div>
     <div className="dashboard-columns">
       <section className="panel task-panel"><div className="panel-header"><div><h2>งานที่ต้องติดตาม</h2><p>กรณีที่ต้องประสานกับแพทย์หรือบันทึกผล</p></div><span className={`count-pill ${tasks.length ? 'count-warn' : ''}`}>{tasks.length} รายการ</span></div>
-        {tasks.length ? <div className="task-list">{tasks.slice(0, 6).map((task) => <div className="task-row" key={task.id}><div className={`task-icon ${task.tone}`}><task.icon size={17} /></div><div className="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></div><button className="button button-small button-outline" onClick={() => document.getElementById(`session-${task.session.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>ติดตาม</button></div>)}</div> : <EmptyState icon={CheckCheck} title="ไม่มีงานค้าง" description="รายการที่ต้องติดตามจะแสดงที่นี่" />}
+        {tasks.length ? <div className="task-list">{tasks.slice(0, 6).map((task) => <div className="task-row" key={task.id}><div className={`task-icon ${task.tone}`}><task.icon size={17} /></div><div className="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></div><button className="button button-small button-outline" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions', { detail: { sessionId: task.session.id } }))}>ติดตาม</button></div>)}</div> : <EmptyState icon={CheckCheck} title="ไม่มีงานค้าง" description="รายการที่ต้องติดตามจะแสดงที่นี่" />}
       </section>
       <section className="panel activity-panel"><div className="panel-header"><div><h2>แพทย์เข้าเว็บล่าสุด</h2><p>ถ้ายังไม่เข้ามา พยาบาลติดตามได้จากรายการนี้</p></div><span className="subtle-tag">อัปเดตขณะเปิดเว็บ</span></div>
         <div className="last-active-list">{data.profiles.filter((p) => p.role === 'physician').slice(0, 7).map((p) => {
@@ -297,13 +317,14 @@ function AdminOverview({ data, refresh, profile }) {
       </section>
     </div>
     <section className="panel upcoming-panel"><div className="panel-header"><div><h2>รอบตรวจถัดไป</h2><p>แสดงข้อมูลนัดรวมและการยืนยันของแพทย์</p></div><button className="text-button" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions'))}>ดูตารางทั้งหมด <ArrowRight size={15} /></button></div>
-      {next.length ? <div className="table-wrap"><table><thead><tr><th>วันและเวลา</th><th>คลินิก</th><th>แพทย์</th><th>ยอดนัด / โควตา</th><th>ยืนยัน</th></tr></thead><tbody>{next.map((s) => <tr key={s.id}><td><strong>{dateText(s.session_date, { day: 'numeric', month: 'short', weekday: 'short' })}</strong><span className="table-sub">{timeText(s.start_time)}–{timeText(s.end_time)} น.</span></td><td><span className="clinic-label"><i className={`clinic-dot ${clinicColor[data.clinics.findIndex((c) => c.id === s.clinic_id) % clinicColor.length]}`} />{clinicMap.get(s.clinic_id)}</span></td><td><strong>{physicianMap.get(s.physician_id) || 'ไม่พบชื่อ'}</strong>{profilesByPhysician.get(s.physician_id)?.last_active_at && <span className="table-sub">เข้าเว็บ {dateTimeText(profilesByPhysician.get(s.physician_id).last_active_at)}</span>}</td><td><div className="quota-cell"><strong>{s.appointment_count}</strong><span>/ {s.appointment_quota}</span><div className="quota-track"><i style={{ width: `${Math.min(100, s.appointment_quota ? s.appointment_count / s.appointment_quota * 100 : 0)}%` }} /></div></div></td><td><ResponseBadge status={s.doctor_response_status} /></td></tr>)}</tbody></table></div> : <EmptyState icon={CalendarDays} title="ยังไม่มีรอบตรวจที่สร้างไว้" description="กด “สร้างรอบตรวจล่วงหน้า 90 วัน” เพื่อสร้างรอบจากตารางประจำ" />}
+      {next.length ? <div className="table-wrap"><table><thead><tr><th>วันและเวลา</th><th>คลินิก</th><th>แพทย์</th><th>ยอดนัด / โควตา</th><th>ยืนยัน</th></tr></thead><tbody>{next.map((s) => <tr key={s.id}><td><strong>{dateText(s.session_date, { day: 'numeric', month: 'short', weekday: 'short' })}</strong><span className="table-sub">{timeText(s.start_time)}–{timeText(s.end_time)} น.</span></td><td><span className="clinic-label"><i className={`clinic-dot ${clinicColor[data.clinics.findIndex((c) => c.id === s.clinic_id) % clinicColor.length]}`} />{clinicMap.get(s.clinic_id)}</span></td><td><strong>{physicianMap.get(s.physician_id) || 'ไม่พบชื่อ'}</strong>{profilesByPhysician.get(s.physician_id)?.last_active_at && <span className="table-sub">เข้าเว็บ {dateTimeText(profilesByPhysician.get(s.physician_id).last_active_at)}</span>}</td><td><div className="quota-cell"><strong>{s.appointment_count}</strong><span>/ {s.appointment_quota}</span><div className="quota-track"><i style={{ width: `${Math.min(100, s.appointment_quota ? s.appointment_count / s.appointment_quota * 100 : 0)}%` }} /></div></div></td><td><ResponseBadge status={s.doctor_response_status} /></td></tr>)}</tbody></table></div> : <EmptyState icon={CalendarDays} title="ยังไม่มีรอบตรวจที่สร้างไว้" description="กด “สร้างรอบตรวจล่วงหน้า 30 วัน” เพื่อสร้างรอบจากตารางประจำ" />}
     </section>
   </>
 }
 
-function AdminSessions({ data, refresh, profile }) {
-  const [search, setSearch] = useState('')
+function AdminSessions({ data, refresh, profile, focusSessionId, clearFocusSession }) {
+  const [clinicFilter, setClinicFilter] = useState('all')
+  const [physicianFilter, setPhysicianFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedMonth, setSelectedMonth] = useState(today().slice(0, 7))
   const [modal, setModal] = useState(null)
@@ -312,20 +333,31 @@ function AdminSessions({ data, refresh, profile }) {
     window.addEventListener('open-admin-sessions', listener)
     return () => window.removeEventListener('open-admin-sessions', listener)
   }, [])
+  useEffect(() => {
+    if (!focusSessionId) return
+    const session = data.sessions.find((item) => item.id === focusSessionId)
+    if (!session) { clearFocusSession(); return }
+    const month = session.session_date.slice(0, 7)
+    if (selectedMonth !== month) { setSelectedMonth(month); return }
+    document.getElementById(`session-${focusSessionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    clearFocusSession()
+  }, [focusSessionId, selectedMonth, data.sessions, clearFocusSession])
   const clinicMap = new Map(data.clinics.map((c) => [c.id, c.name]))
   const physicianMap = new Map(data.physicians.map((p) => [p.id, p.display_name]))
+  const filterDoctors = data.physicians.filter((p) => p.is_active && !p.is_placeholder && (clinicFilter === 'all' || p.clinic_id === clinicFilter))
   const visible = data.sessions.filter((s) => s.session_date.startsWith(selectedMonth)
     && (statusFilter === 'all' || s.session_status === statusFilter)
-    && `${clinicMap.get(s.clinic_id) || ''} ${physicianMap.get(s.physician_id) || ''}`.toLowerCase().includes(search.toLowerCase()))
+    && (clinicFilter === 'all' || s.clinic_id === clinicFilter)
+    && (physicianFilter === 'all' || s.physician_id === physicianFilter))
   const save = async (id, payload) => {
     const { error } = await apiClient.from('schedule_sessions').update(payload).eq('id', id)
     if (error) throw error
     await refresh()
   }
   return <>
-    <PageTitle eyebrow="การจัดการรอบตรวจ" title="ตารางและการติดตาม" description="แก้ไขยอดนัด งดตรวจ มอบหมายแพทย์ทดแทน และบันทึกผลประสานงาน" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจ 90 วัน</button>} />
-    <div className="filter-bar panel"><label className="search-field"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ค้นหาคลินิกหรือแพทย์" /></label><label className="select-field"><span>เดือน</span><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} /></label><label className="select-field"><span>สถานะ</span><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">ทุกรอบตรวจ</option><option value="scheduled">กำหนดตรวจ</option><option value="cancelled">งดตรวจ</option></select></label></div>
-    <div id="session-list-start" className="session-list-heading"><div><h2>รอบตรวจในเดือน</h2><span>{visible.length} รายการ · สร้างจากตารางประจำได้โดยไม่ซ้ำ</span></div><button className="button button-outline button-small" onClick={() => generateNextSessions(refresh)}><RefreshCw size={15} />สร้างรอบล่วงหน้า</button></div>
+    <PageTitle eyebrow="การจัดการรอบตรวจ" title="ตารางและการติดตาม" description="เลือกคลินิกและแพทย์เพื่อดูรอบ แล้วกรอกยอดนัดที่พยาบาลตรวจสอบแล้ว" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจ 30 วัน</button>} />
+    <div className="filter-bar filter-bar-pickers panel"><label className="select-field"><span>คลินิก</span><select value={clinicFilter} onChange={(e) => { setClinicFilter(e.target.value); setPhysicianFilter('all') }}><option value="all">ทุกคลินิก</option>{data.clinics.filter((clinic) => clinic.is_active).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label><label className="select-field"><span>แพทย์</span><select value={physicianFilter} onChange={(e) => setPhysicianFilter(e.target.value)}><option value="all">แพทย์ทุกท่าน</option>{filterDoctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.display_name}</option>)}</select></label><label className="select-field"><span>เดือน</span><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} /></label><label className="select-field"><span>สถานะ</span><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">ทุกสถานะ</option><option value="scheduled">กำหนดตรวจ</option><option value="cancelled">งดตรวจ</option></select></label></div>
+    <div id="session-list-start" className="session-list-heading"><div><h2>รอบตรวจในเดือน</h2><span>{visible.length} รายการ · เลือกคลินิก/แพทย์ด้านบนเพื่อกรองรายการ</span></div><button className="button button-outline button-small" onClick={() => generateNextSessions(refresh)}><RefreshCw size={15} />สร้างรอบ 30 วัน</button></div>
     <div className="admin-session-list">{visible.map((s, i) => <AdminSessionCard key={s.id} item={s} index={i} clinicName={clinicMap.get(s.clinic_id)} physicianName={physicianMap.get(s.physician_id)} doctors={data.physicians.filter((p) => p.is_active && !p.is_placeholder)} onEdit={(type) => setModal({ type, session: s })} onSave={save} />)}
       {!visible.length && <EmptyState icon={CalendarDays} title="ไม่มีรอบตรวจในช่วงนี้" description="สร้างรอบจากตารางประจำ หรือเลือกเดือนอื่น" />}</div>
     {modal && <SessionActionModal modal={modal} doctors={data.physicians.filter((p) => p.is_active && !p.is_placeholder)} profile={profile} onClose={() => setModal(null)} onSave={async (payload) => { await save(modal.session.id, payload); setModal(null) }} />}
@@ -342,7 +374,7 @@ function AdminSessionCard({ item, index, clinicName, physicianName, doctors, onE
   async function saveMetrics() {
     setSaving(true); setError('')
     try { await onSave(item.id, { appointment_quota: Number(quota), appointment_count: Number(count) }); setEditing(false) }
-    catch { setError('บันทึกไม่สำเร็จ ตรวจสอบว่าจำนวนที่นัดไม่เกินโควตาหรือไม่') }
+    catch { setError('บันทึกไม่สำเร็จ กรุณาตรวจสอบยอดนัดและโควตา') }
     finally { setSaving(false) }
   }
   return <article id={`session-${item.id}`} className={`admin-session-card ${item.session_status === 'cancelled' ? 'session-cancelled' : ''}`}>
@@ -353,10 +385,10 @@ function AdminSessionCard({ item, index, clinicName, physicianName, doctors, onE
       {item.doctor_response_status === 'busy' && <div className="busy-note"><AlertCircle size={14} />แจ้งติดภารกิจ{item.doctor_response_note ? `: ${item.doctor_response_note}` : ''}{!item.resolved_at && <span className="needs-resolution">· รอบันทึกผลจัดการ</span>}</div>}
       {item.admin_resolution_note && <div className="resolution-note"><Check size={14} />ผลการจัดการ: {item.admin_resolution_note}</div>}
     </div>
-    <div className="session-quota-area">{editing ? <div className="inline-metrics"><label>นัดแล้ว<input type="number" min="0" value={count} onChange={(e) => setCount(e.target.value)} /></label><span>/</span><label>โควตา<input type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} /></label></div> : <div className="metric-display"><strong>{item.appointment_count}<small> / {item.appointment_quota}</small></strong><span>นัดแล้ว / โควตา</span><div className="quota-track"><i style={{ width: `${Math.min(100, item.appointment_quota ? item.appointment_count / item.appointment_quota * 100 : 0)}%` }} /></div></div>}
+    <div className="session-quota-area">{editing ? <div className="inline-metrics"><label>ยอดนัดที่ตรวจแล้ว<input type="number" min="0" value={count} onChange={(e) => setCount(e.target.value)} /></label><span>/</span><label>โควตา<input type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} /></label></div> : <div className="metric-display"><strong>{item.appointment_count}<small> / {item.appointment_quota}</small></strong><span>ยอดที่พยาบาลตรวจแล้ว / โควตา</span><div className="quota-track"><i style={{ width: `${Math.min(100, item.appointment_quota ? item.appointment_count / item.appointment_quota * 100 : 0)}%` }} /></div></div>}
       {error && <small className="field-error">{error}</small>}
     </div>
-    <div className="session-actions">{editing ? <><button className="button button-small button-primary" disabled={saving} onClick={saveMetrics}>บันทึก</button><button className="icon-button" onClick={() => setEditing(false)}><X size={16} /></button></> : <><button className="button button-small button-outline" onClick={() => setEditing(true)}>แก้ยอด</button>
+    <div className="session-actions">{editing ? <><button className="button button-small button-primary" disabled={saving} onClick={saveMetrics}>บันทึกยอดนัด</button><button className="icon-button" title="ยกเลิก" onClick={() => setEditing(false)}><X size={16} /></button></> : <><button className="button button-small button-outline" onClick={() => setEditing(true)}>{Number(item.appointment_count) === 0 ? 'กรอกยอดนัด' : 'ปรับยอดนัด'}</button>
       {item.session_status === 'scheduled' && item.doctor_response_status === 'busy' && <button className="button button-small button-quiet" onClick={() => onEdit('busy')}>{item.resolved_at ? 'แก้ผลจัดการ' : 'ผลจัดการ'}</button>}
       {item.session_status === 'scheduled' && <button className="icon-button danger-icon" title="งดตรวจ" onClick={() => onEdit('cancel')}><XCircle size={17} /></button>}
       {item.session_status === 'scheduled' && <button className="icon-button" title="กำหนดแพทย์ทดแทน" onClick={() => onEdit('replace')}><Users size={17} /></button>}
@@ -385,6 +417,7 @@ function SessionActionModal({ modal, doctors, profile, onClose, onSave }) {
     <button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">{dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</div><h2 id="modal-title">{title}</h2><p>{session.doctor_response_note ? `หมายเหตุแพทย์: ${session.doctor_response_note}` : 'บันทึกไว้ในประวัติการติดตามของระบบ'}</p>
     {modal.type === 'replace' && <label className="modal-label">แพทย์ทดแทน<select value={replacement} onChange={(e) => setReplacement(e.target.value)}><option value="">เลือกแพทย์</option>{doctors.filter((d) => d.id !== session.physician_id).map((d) => <option key={d.id} value={d.id}>{d.display_name}</option>)}</select></label>}
     {modal.type === 'cancel' && <div className="soft-warning"><AlertCircle size={17} /><span>การบันทึกนี้ไม่ยกเลิกหรือลบยอดนัดผู้ป่วยโดยอัตโนมัติ ให้ประสานงานและจัดการนัดแยกตามขั้นตอนของหน่วยงาน</span></div>}
+    {modal.type === 'busy' && <div className="soft-warning"><AlertCircle size={17} /><span>ให้โทรประสานเลื่อนนัดตามขั้นตอน แล้วบันทึกผลการโทรไว้ที่นี่ โดยไม่บันทึกข้อมูลผู้ป่วย</span></div>}
     <label className="modal-label">{modal.type === 'cancel' ? 'เหตุผลงดตรวจ' : modal.type === 'replace' ? 'หมายเหตุการทดแทน' : 'ผลการประสานงาน'}<textarea rows="3" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="พิมพ์สรุปการจัดการ…" /><small className="note-privacy">บันทึกเฉพาะการประสานงาน · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>
     {error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}
     <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={busy} onClick={save}><Check size={16} />{busy ? 'กำลังบันทึก…' : 'บันทึกผล'}</button></div>
@@ -553,9 +586,9 @@ function DoctorDashboard({ data, refresh, profile }) {
     <PageTitle eyebrow="พื้นที่แพทย์" title={`สวัสดี, ${profile.display_name}`} description="ดูตารางออกตรวจและยอดนัดของคุณ พร้อมตอบกลับการยืนยันในหน้าเว็บ" action={<button className="button button-outline" onClick={() => window.dispatchEvent(new CustomEvent('go-notifications'))}><Bell size={17} />การแจ้งเตือน {unread > 0 && <span className="button-badge">{unread}</span>}</button>} />
     {next ? <section className="next-session-card"><div className="next-glow" /><div className="next-label"><span className="next-icon"><CalendarDays size={18} /></span><span>{nextUp ? 'รอบตรวจถัดไป · ใกล้ถึงวัน' : 'รอบตรวจถัดไป'}</span><span className={`response-chip response-${nextAssigned ? next.doctor_response_status : 'confirmed'}`}>{nextAssigned ? responseLabel(next.doctor_response_status) : 'มีแพทย์ทดแทน'}</span></div><div className="next-main"><div><strong>{clinicMap.get(next.clinic_id) || 'คลินิก'}</strong><span>{weekdayText(next.session_date)} {dateText(next.session_date, { day: 'numeric', month: 'long', year: 'numeric' })}</span><span className="next-time"><Clock3 size={17} />{timeText(next.start_time)}–{timeText(next.end_time)} น.</span></div><div className="next-appointments"><span>ยอดนัด · โควตา · {remainingText(next)}</span><strong>{next.appointment_count}<small> / {next.appointment_quota}</small></strong><div className="quota-track quota-track-light"><i style={{ width: `${Math.min(100, next.appointment_quota ? next.appointment_count / next.appointment_quota * 100 : 0)}%` }} /></div><small className="updated-at">ยอดนัดอัปเดต {dateTimeText(next.appointment_updated_at || next.updated_at)}</small></div></div>
       {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="replacement-banner"><Users size={16} />รอบนี้มีแพทย์ทดแทนแล้ว คุณไม่ต้องตอบกลับรอบนี้</div>}
-      {nextAssigned && next.doctor_response_status === 'pending' && <div className="next-actions"><button className="button button-light" onClick={() => respond(next, 'confirmed')}><Check size={16} />ยืนยันออกตรวจ</button><button className="button button-light-outline" onClick={() => setResponseModal(next)}><AlertCircle size={16} />แจ้งติดภารกิจ</button></div>}
+      {nextAssigned && next.doctor_response_status === 'pending' && <div className="next-actions"><button className="button button-light" onClick={() => respond(next, 'confirmed')}><Check size={16} />ยืนยันออกตรวจ</button><button className="button button-light-outline" onClick={() => setResponseModal(next)}><AlertCircle size={16} />แจ้งพยาบาล</button></div>}
       {nextAssigned && next.doctor_response_status === 'confirmed' && <div className="confirmation-line"><CheckCheck size={16} />ยืนยันแล้ว{next.doctor_responded_at ? ` · ${dateTimeText(next.doctor_responded_at)}` : ''}</div>}
-      {nextAssigned && next.doctor_response_status === 'busy' && <div className="doctor-busy-line"><AlertCircle size={16} />แจ้งติดภารกิจแล้ว · รอพยาบาลบันทึกผลการจัดการ</div>}
+      {nextAssigned && next.doctor_response_status === 'busy' && <div className="doctor-busy-line"><AlertCircle size={16} />แจ้งพยาบาลแล้ว · รอพยาบาลโทรประสานเรื่องนัด</div>}
       {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="confirmation-line"><CheckCheck size={16} />พยาบาลบันทึกการจัดแพทย์ทดแทนแล้ว</div>}
     </section> : <section className="next-session-empty"><CalendarDays size={23} /><div><strong>ยังไม่มีรอบตรวจถัดไป</strong><span>ติดต่อพยาบาลหากตารางของคุณยังไม่แสดง</span></div></section>}
     <section className="panel calendar-panel"><div className="panel-header calendar-heading"><div><h2>ตารางรายเดือน</h2><p>แตะวันที่มีรอบตรวจเพื่อดูคลินิกและยอดนัด</p></div><div className="month-control"><button className="icon-button" onClick={() => setMonth(shiftMonth(month, -1))}><ArrowLeft size={17} /></button><strong>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric', timeZone: BANGKOK }).format(new Date(`${month}-01T00:00:00+07:00`))}</strong><button className="icon-button" onClick={() => setMonth(shiftMonth(month, 1))}><ArrowRight size={17} /></button></div></div>
@@ -599,7 +632,7 @@ function BusyResponseModal({ session, clinicName, onClose, onSave }) {
     setSaving(true); setError('')
     try { await onSave(note.trim()) } catch { setError('ส่งข้อมูลไม่สำเร็จ ลองอีกครั้ง'); setSaving(false) }
   }
-  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาล</div><h2>แจ้งติดภารกิจ</h2><p>{clinicName} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</p><div className="soft-warning"><AlertCircle size={17} /><span>การแจ้งนี้ยังไม่ยกเลิกรอบตรวจ พยาบาลจะเป็นผู้บันทึกผลการจัดการ</span></div><label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุข้อมูลที่ต้องการแจ้งพยาบาล" /><small className="note-privacy">บันทึกเฉพาะเหตุขัดข้อง · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving} onClick={submit}><AlertCircle size={16} />{saving ? 'กำลังส่ง…' : 'แจ้งติดภารกิจ'}</button></div></section></div>
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาล</div><h2>แจ้งติดภารกิจ</h2><p>{clinicName} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</p><div className="soft-warning"><AlertCircle size={17} /><span>รายการนัดจะยังไม่ถูกยกเลิก พยาบาลจะรับเรื่องและโทรประสานการนัดตามขั้นตอน</span></div><label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุข้อมูลที่ต้องการแจ้งพยาบาล" /><small className="note-privacy">บันทึกเฉพาะเหตุขัดข้อง · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving} onClick={submit}><AlertCircle size={16} />{saving ? 'กำลังส่ง…' : 'แจ้งพยาบาล'}</button></div></section></div>
 }
 
 function NotificationCenter({ notifications, refresh }) {
@@ -635,7 +668,7 @@ function responseLabel(status) { return status === 'confirmed' ? 'ยืนย�
 function EmptyState({ icon: Icon, title, description }) { return <div className="empty-state"><div><Icon size={21} /></div><strong>{title}</strong><span>{description}</span></div> }
 
 async function generateNextSessions(refresh) {
-  const { data, error } = await apiClient.rpc('generate_schedule_sessions', { p_from: today(), p_to: addDays(today(), 90) })
+  const { data, error } = await apiClient.rpc('generate_schedule_sessions', { p_from: today(), p_to: addDays(today(), 30) })
   if (error) window.alert(error.message || 'สร้างรอบตรวจไม่สำเร็จ')
   else { window.alert(`สร้างรอบตรวจใหม่ ${data ?? 0} รายการ · รอบที่มีอยู่แล้วจะไม่ถูกสร้างซ้ำ`); await refresh() }
 }
