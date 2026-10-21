@@ -62,13 +62,15 @@ function startRoleSession_(request) {
     const users = records_('Users');
     user = users.find(function(row) { return String(row.role || '').trim().toLowerCase() === 'admin' && row.is_active !== false; });
     if (user) {
-      const adminName = !user.display_name || String(user.display_name).trim() === 'ผู้ดูแล' ? 'พยาบาล' : user.display_name;
+      const oldAdminNames = ['', 'ผู้ดูแล', 'ผู้ดูแลระบบ'];
+      const adminName = oldAdminNames.includes(String(user.display_name || '').trim()) ? 'พยาบาล' : user.display_name;
       if (user.role !== 'admin' || user.is_active !== true || user.display_name !== adminName) writeFields_('Users', user._row, { display_name: adminName, role: 'admin', is_active: true });
       user.display_name = adminName; user.role = 'admin'; user.is_active = true;
     } else {
       user = users.find(function(row) { return String(row.id || '') === 'mode-admin'; });
       if (user) {
-        const adminName = !user.display_name || String(user.display_name).trim() === 'ผู้ดูแล' ? 'พยาบาล' : user.display_name;
+        const oldAdminNames = ['', 'ผู้ดูแล', 'ผู้ดูแลระบบ'];
+        const adminName = oldAdminNames.includes(String(user.display_name || '').trim()) ? 'พยาบาล' : user.display_name;
         writeFields_('Users', user._row, { display_name: adminName, role: 'admin', is_active: true });
         user.display_name = adminName; user.role = 'admin'; user.is_active = true;
       } else {
