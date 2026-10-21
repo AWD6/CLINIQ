@@ -127,7 +127,7 @@ function Login() {
         {!loadingDoctors && !error && physicians.length === 0 && <div className="empty-doctor-list">ยังไม่พบรายชื่ออาจารย์ กรุณากดโหลดหน้าใหม่</div>}
         <div className="doctor-entry-actions"><button className="button button-quiet" onClick={() => { setMode('choose'); setError('') }}>ย้อนกลับ</button><button className="button button-primary" disabled={!physicianId || busy} onClick={() => enter('physician', physicianId)}>{busy ? 'กำลังเปิด…' : 'ไปที่ตารางของฉัน'}<ArrowRight size={16} /></button></div>
       </div>}
-      <div className="credit-banner"><Sparkles className="credit-sparkle-icon" size={14} /><span className="credit-copy"><span>conceived, designed and brought to life by</span><strong>RN.Patipon Wiyo</strong></span></div>
+      <div className="credit-banner"><Sparkles className="credit-sparkle-icon" size={14} /><span className="credit-copy"><span>conceived, designed and Brought to life by</span><strong>RN.Patipon Wiyo</strong></span></div>
       {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังเปิดหน้าทำงาน…</div>}
       {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
       <div className="login-foot">ข้อมูลนี้ทำเพื่อเตรียมความพร้อมของห้องตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
