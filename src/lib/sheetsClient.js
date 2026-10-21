@@ -40,6 +40,7 @@ function ensureBridge() {
 
 function isNestedBridgeSource(source) {
   try {
+    if (source === frame?.contentWindow) return true
     const nestedFrames = frame?.contentWindow?.frames
     if (!nestedFrames) return false
     for (let index = 0; index < nestedFrames.length; index++) {

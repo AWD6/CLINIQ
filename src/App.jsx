@@ -63,7 +63,7 @@ function ConfigNotice() {
 function BrandMark({ large = false }) {
   return <div className={`brand-mark ${large ? 'brand-mark-large' : ''}`}>
     <div className="brand-symbol"><Stethoscope size={large ? 28 : 20} strokeWidth={2.3} /></div>
-    <div><strong>คลินิกนอกเวลา</strong><span>มหาราชนครเชียงใหม่</span></div>
+    <div><strong>CLINIQ</strong><span>คลินิกเฉพาะทางนอกเวลา · มหาราชนครเชียงใหม่</span></div>
   </div>
 }
 
@@ -74,6 +74,16 @@ function Login() {
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const physicianGroups = useMemo(() => {
+    const groups = new Map()
+    physicians.forEach((doctor) => {
+      const label = doctor.clinic_label || 'คลินิกอื่น ๆ'
+      if (!groups.has(label)) groups.set(label, { label, color: doctor.clinic_color || 'teal', doctors: [] })
+      groups.get(label).doctors.push(doctor)
+    })
+    return [...groups.values()]
+  }, [physicians])
+  const selectedDoctor = physicians.find((doctor) => doctor.id === physicianId)
   useEffect(() => {
     let alive = true
     apiClient.listPhysicians().then(({ data, error: listError }) => {
@@ -92,26 +102,35 @@ function Login() {
   }
   return <main className="login-screen">
     <div className="login-art"><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" />
-      <div className="art-copy"><div className="art-kicker">MAHARAJ NAKORN CHIANG MAI</div><h1>ตารางออกตรวจ<br />จบในหน้าเดียว</h1><p>จัดตารางง่าย เห็นยอดนัดชัด<br />แพทย์ตอบกลับได้จากมือถือ</p>
+      <div className="art-copy"><div className="art-kicker">MAHARAJ NAKORN CHIANG MAI</div><h1>CLINIQ</h1><p>คลินิกเฉพาะทางนอกเวลา<br />ตารางเวรและการตอบกลับในที่เดียว</p>
         <div className="art-note"><ShieldCheck size={18} /> บันทึกลง Google Sheet โดยตรง</div></div>
       <div className="art-bottom">คลินิกเฉพาะทางนอกเวลา · เวลาประเทศไทย</div>
     </div>
     <section className="login-panel"><div className="login-inner"><BrandMark />
       <div className="welcome"><div className="eyebrow">ตารางเวรพร้อมแล้ว ✨</div><h2>{mode === 'choose' ? 'เข้าใช้งานแบบไหน?' : 'เลือกชื่อแพทย์'}</h2><p>{mode === 'choose' ? 'แตะเลือกเพื่อไปยังหน้าที่ต้องการ' : 'ตารางและการแจ้งเตือนจะแสดงเฉพาะชื่อที่เลือก'}</p></div>
       {mode === 'choose' ? <div className="entry-choice-grid">
-        <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>ผู้ดูแล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบ</small></span><ArrowRight size={18} /></button>
+        <button className="entry-role-card entry-admin" onClick={() => enter('admin')} disabled={busy}><span className="entry-role-icon"><ShieldCheck size={22} /></span><span><strong>ผู้ดูแล</strong><small>จัดตาราง · อัปเดตยอดนัด · ติดตามการตอบกลับ</small></span><ArrowRight size={18} /></button>
         <button className="entry-role-card entry-doctor" onClick={() => setMode('physician')} disabled={busy}><span className="entry-role-icon"><Stethoscope size={22} /></span><span><strong>แพทย์</strong><small>ดูตาราง · ยืนยัน · แจ้งติดภารกิจ</small></span><ArrowRight size={18} /></button>
       </div> : <div className="doctor-entry-form">
-        <label htmlFor="doctor-entry">ชื่อแพทย์</label>
-        <select id="doctor-entry" value={physicianId} onChange={(event) => setPhysicianId(event.target.value)} disabled={loadingDoctors || busy}>
+        <label htmlFor="doctor-entry">เลือกชื่ออาจารย์</label>
+        <div className={`specialty-selection ${selectedDoctor ? `specialty-${selectedDoctor.clinic_color}` : ''}`}>
+          <span className="specialty-selection-icon"><Stethoscope size={17} /></span>
+          <span><small>กลุ่มคลินิก</small><strong>{selectedDoctor?.clinic_label || 'เลือกชื่อเพื่อดูตาราง'}</strong></span>
+          <span className="specialty-count">{physicians.length} ท่าน</span>
+        </div>
+        <select id="doctor-entry" value={physicianId} onChange={(event) => setPhysicianId(event.target.value)} disabled={loadingDoctors || busy || physicians.length === 0}>
           <option value="">{loadingDoctors ? 'กำลังโหลดรายชื่อ…' : 'เลือกชื่อของคุณ'}</option>
-          {physicians.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.display_name}</option>)}
+          {physicianGroups.map((group) => <optgroup key={group.label} label={group.label}>
+            {group.doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.display_name}</option>)}
+          </optgroup>)}
         </select>
+        {!loadingDoctors && !error && physicians.length === 0 && <div className="empty-doctor-list">ยังไม่พบรายชื่ออาจารย์ กรุณากดโหลดหน้าใหม่</div>}
         <div className="doctor-entry-actions"><button className="button button-quiet" onClick={() => { setMode('choose'); setError('') }}>ย้อนกลับ</button><button className="button button-primary" disabled={!physicianId || busy} onClick={() => enter('physician', physicianId)}>{busy ? 'กำลังเปิด…' : 'ไปที่ตารางของฉัน'}<ArrowRight size={16} /></button></div>
       </div>}
       {busy && <div className="login-help"><span className="spinner spinner-small" />กำลังเปิดหน้าทำงาน…</div>}
       {error && <div className="inline-error"><AlertCircle size={17} />{error}</div>}
-      <div className="login-foot">ข้อมูลนี้ใช้ประสานงานตารางตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
+      <div className="login-foot">ข้อมูลนี้ทำเพื่อเตรียมความพร้อมของห้องตรวจเท่านั้น · ไม่มีข้อมูลผู้ป่วย</div>
+      <div className="credit-banner">conceived, designed and Brought to life by <strong>RN.Patipon Wiyo</strong></div>
     </div></section>
   </main>
 }
@@ -223,7 +242,7 @@ function Workspace({ session, profile }) {
           ? <AdminContent tab={activeTab} data={data} refresh={() => refresh(true)} session={session} profile={profile} />
           : <DoctorContent tab={activeTab} data={data} refresh={() => refresh(true)} profile={profile} />}
       </main>
-      <footer className="page-footer"><span>ระบบบริหารตารางออกตรวจ · ข้อมูลอัปเดตเมื่อเปิดหน้าเว็บ</span><span>เวลาไทย (Asia/Bangkok)</span></footer>
+          <footer className="page-footer"><span>CLINIQ · ข้อมูลอัปเดตเมื่อเปิดหน้าเว็บ</span><span>conceived, designed and Brought to life by RN.Patipon Wiyo · เวลาไทย</span></footer>
     </div>
   </div>
 }
@@ -376,6 +395,7 @@ function AdminSetup({ data, refresh }) {
   const [clinicName, setClinicName] = useState('')
   const [clinicShort, setClinicShort] = useState('')
   const [doctorName, setDoctorName] = useState('')
+  const [doctorClinicId, setDoctorClinicId] = useState('')
   const [weekday, setWeekday] = useState('1')
   const [weekOfMonth, setWeekOfMonth] = useState('0')
   const [clinicId, setClinicId] = useState('')
@@ -398,7 +418,7 @@ function AdminSetup({ data, refresh }) {
   }
   async function addPhysician(e) {
     e.preventDefault(); setSaving(true); setNotice(''); setSlotError('')
-    const { error } = await apiClient.from('physicians').insert({ display_name: doctorName.trim(), is_placeholder: false, notes: 'เพิ่มโดยพยาบาลผู้ดูแล' })
+    const { error } = await apiClient.from('physicians').insert({ display_name: doctorName.trim(), clinic_id: doctorClinicId, is_placeholder: false, notes: 'เพิ่มโดยพยาบาลผู้ดูแล' })
     if (error) setSlotError(error.message); else { setDoctorName(''); setNotice('เพิ่มข้อมูลแพทย์แล้ว'); await refresh() }
     setSaving(false)
   }
@@ -446,7 +466,7 @@ function AdminSetup({ data, refresh }) {
         <form className="compact-form two-fields" onSubmit={addClinic}><label>ชื่อคลินิก<input required value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder="เช่น คลินิกผิวหนัง" /></label><label>ชื่อย่อ<input required value={clinicShort} onChange={(e) => setClinicShort(e.target.value)} placeholder="ชื่อย่อ" /></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มคลินิก</button></form>
       </section>
       <section className="panel setup-panel"><div className="panel-header"><div><h2>เพิ่มข้อมูลแพทย์</h2><p>แพทย์เลือกชื่อตัวเองจากหน้าแรกเพื่อเข้าดูตาราง</p></div><UserRound size={19} className="muted-icon" /></div>
-        <form className="compact-form" onSubmit={addPhysician}><label>ชื่อที่แสดง<input required value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="คำนำหน้าและชื่อแพทย์" /></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มแพทย์</button></form>
+        <form className="compact-form two-fields" onSubmit={addPhysician}><label>ชื่อที่แสดง<input required value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="เช่น อ.ชื่อ" /></label><label>กลุ่มคลินิก<select required value={doctorClinicId} onChange={(e) => setDoctorClinicId(e.target.value)}><option value="">เลือกคลินิก</option>{data.clinics.filter((c) => c.is_active).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มแพทย์</button></form>
         <div className="helper-line"><AlertCircle size={15} />ตรวจสอบชื่อในตารางภาพก่อนเปลี่ยน placeholder เป็นชื่อจริง</div>
       </section>
     </div>

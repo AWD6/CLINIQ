@@ -262,3 +262,51 @@ td strong { color: #405a54; font-size: 9px; font-weight: 600; white-space: nowra
 @media (max-width: 600px) {
   .topbar { height: 56px; padding: 0 13px; }.breadcrumbs { font-size: 9px; gap: 6px; }.top-actions { gap: 7px; }.live-indicator { display: none; }.content-area { padding: 23px 13px 25px; }.page-footer { padding: 12px 13px; font-size: 8px; }.page-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 18px; }.page-heading h1 { font-size: 21px; }.page-heading p { font-size: 10px; }.heading-action { width: 100%; }.heading-action .button { width: 100%; }.welcome-strip { align-items: flex-start; gap: 10px; flex-direction: column; }.welcome-strip > .button { width: 100%; }.stats-grid { gap: 8px; }.stat-card { min-height: 84px; padding: 11px; gap: 8px; }.stat-icon { width: 29px; height: 29px; flex-basis: 29px; }.stat-copy span { font-size: 8px; }.stat-copy strong { font-size: 18px; }.panel-header { padding: 14px; }.panel-header p { font-size: 8px; }.dashboard-columns { gap: 10px; }.task-row { gap: 7px; }.task-copy strong { white-space: normal; }.task-row .button { min-width: 50px; }.last-active-list { padding: 0 13px 10px; }.active-time { display: block; text-align: right; white-space: normal; max-width: 104px; }.active-time i { display: inline-block; margin-right: 4px; }.filter-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }.search-field { grid-column: span 2; max-width: none; }.select-field { justify-content: space-between; }.select-field input, .select-field select { width: 100%; }.session-list-heading { gap: 10px; align-items: end; }.session-list-heading h2 { font-size: 11px; }.session-list-heading span { font-size: 8px; }.admin-session-card { padding: 9px; grid-template-columns: 39px minmax(0,1fr); gap: 8px; }.session-date-col { width: 37px; height: 44px; }.session-day { font-size: 15px; }.session-title-line > strong { font-size: 10px; }.session-doctor { font-size: 8px; }.session-quota-area { grid-column: 2; }.session-actions { grid-column: 1 / -1; grid-row: auto; justify-content: flex-end; border-top: 1px solid #f0f3f2; padding-top: 6px; }.inline-metrics { justify-content: flex-start; }.session-actions .button-small { min-height: 28px; }.setup-grid { grid-template-columns: 1fr; }.invite-panel { grid-column: auto; }.invite-form { grid-template-columns: 1fr; }.compact-form { flex-wrap: wrap; }.two-fields label { min-width: calc(50% - 8px); }.template-create { grid-template-columns: 1fr 1fr; gap: 7px; }.template-create label:nth-child(2) { grid-column: span 2; }.template-create .button { grid-column: span 2; }.template-table table { min-width: 700px; }.doctor-directory-grid { padding: 0 11px 12px; }.doctor-directory-card { gap: 5px; }.doctor-directory-copy strong { font-size: 8px; }.doctor-directory-card > .status-pill { font-size: 7px; }.next-session-card { padding: 14px; }.next-main { grid-template-columns: 1fr; gap: 13px; padding-left: 0; }.next-main > div:first-child > strong { font-size: 17px; }.next-appointments { padding: 10px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.17); }.next-appointments > strong { font-size: 20px; }.next-actions, .confirmation-line, .doctor-busy-line { padding-left: 0; }.replacement-banner { margin-left: 0; }.calendar-heading { align-items: flex-start; flex-direction: column; }.month-control { align-self: flex-end; margin-top: -8px; }.calendar-cell { min-height: 43px; padding: 4px; }.calendar-number { width: 18px; height: 18px; font-size: 8px; }.calendar-events { margin-top: 2px; }.calendar-legend { gap: 10px; }.doctor-summary-grid { grid-template-columns: 1fr; gap: 10px; }.doctor-session-row { gap: 6px; }.doctor-session-copy > strong { font-size: 8px; }.doctor-session-copy > span { font-size: 7px; }.doctor-session-row > .response-badge { font-size: 7px; padding: 3px 6px; }.doctor-session-row > .text-button { padding: 3px; }.notification-explainer { align-items: flex-start; padding: 10px; }.notification-explainer p { font-size: 8px; }.notification-list { padding: 0 11px 8px; }.notification-row { gap: 8px; }.notification-copy strong { font-size: 9px; }.notification-copy p { font-size: 8px; }.login-screen { display: block; min-height: 100vh; background: #fff; }.login-art { display: none; }.login-panel { min-height: 100vh; padding: 27px 23px; }.login-inner .brand-mark { margin-bottom: 56px; }.login-foot { margin-top: 35px; }.modal-card { padding: 21px 17px; }.page-alert { align-items: flex-start; }.page-alert .text-button { white-space: nowrap; }
 }
+
+/* CLINIQ identity and grouped physician picker */
+.brand-mark strong { font-size: 17px; letter-spacing: .08em; color: #183f39; }
+.brand-mark span { max-width: 230px; line-height: 1.55; }
+.art-copy h1 { font-size: clamp(60px, 7vw, 92px); line-height: .98; letter-spacing: .11em; font-weight: 700; margin: 22px 0 18px; }
+.art-copy p { font-size: 15px; }
+.entry-role-card { border-width: 1.5px; }
+.entry-role-card:focus-visible, .doctor-entry-form select:focus-visible { outline: 3px solid rgba(44, 159, 136, .3); outline-offset: 3px; }
+.entry-admin { background: linear-gradient(135deg, #fbfaff, #f1efff); border-color: #e5e1ff; }
+.entry-admin:hover { border-color: #b7aef4; box-shadow: 0 14px 30px rgba(96, 78, 178, .15); }
+.entry-admin .entry-role-icon { color: #6c59d3; background: #e8e4ff; }
+.entry-doctor { background: linear-gradient(135deg, #fbfffd, #eaf8f3); border-color: #d9efe7; }
+.entry-doctor:hover { border-color: #9bd1bd; box-shadow: 0 14px 30px rgba(35, 129, 104, .14); }
+.entry-doctor .entry-role-icon { color: #08796f; background: #dff4eb; }
+.doctor-entry-form { gap: 10px; }
+.specialty-selection { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 9px 11px; border: 1px solid #dce9e5; border-radius: 12px; background: #f7fbf9; color: #336b5f; transition: background .18s, border-color .18s, color .18s; }
+.specialty-selection-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 11px; background: #e3f3ed; color: #158877; }
+.specialty-selection > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.specialty-selection small { color: #82958f; font-size: 9px; }
+.specialty-selection strong { font-size: 11px; line-height: 1.35; }
+.specialty-count { color: #82958f; font-size: 9px; white-space: nowrap; }
+.specialty-violet { color: #614cb7; border-color: #ded8ff; background: #f8f6ff; }
+.specialty-violet .specialty-selection-icon { color: #715bd0; background: #ece8ff; }
+.specialty-teal { color: #08786c; border-color: #ccebe2; background: #f0faf6; }
+.specialty-teal .specialty-selection-icon { color: #078878; background: #dcf4eb; }
+.specialty-rose { color: #ae4a6f; border-color: #f4d7e3; background: #fff6f9; }
+.specialty-rose .specialty-selection-icon { color: #c05177; background: #fde7ef; }
+.specialty-amber { color: #a16d20; border-color: #f3e2c4; background: #fffaf0; }
+.specialty-amber .specialty-selection-icon { color: #b67b25; background: #fff0d4; }
+.specialty-blue { color: #3d64a6; border-color: #d7e4f9; background: #f5f9ff; }
+.specialty-blue .specialty-selection-icon { color: #4b75bc; background: #e4efff; }
+.specialty-cyan { color: #187d8e; border-color: #cdebf0; background: #f1fbfc; }
+.specialty-cyan .specialty-selection-icon { color: #16899a; background: #ddf5f8; }
+.doctor-entry-form select { min-height: 52px; font-weight: 600; box-shadow: 0 4px 16px rgba(27, 87, 73, .045); }
+.doctor-entry-form select optgroup { color: #42635a; font-weight: 700; }
+.doctor-entry-form select option { color: #315b52; padding: 7px; }
+.empty-doctor-list { border-radius: 10px; padding: 10px 12px; background: #fff8e9; color: #94733f; font-size: 10px; line-height: 1.6; }
+.credit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; margin-top: 14px; padding: 9px 12px; border: 1px solid #d8ebe5; border-radius: 12px; background: linear-gradient(100deg, #f4fbf8, #f7f5ff); color: #718780; font-size: 8px; letter-spacing: .035em; line-height: 1.6; text-align: center; }
+.credit-banner strong { color: #285b50; font-weight: 700; }
+.page-footer { gap: 8px; flex-wrap: wrap; }
+.page-footer span:last-child { text-align: right; }
+@media (max-width: 600px) {
+  .art-copy h1 { font-size: 64px; }
+  .doctor-entry-form select { min-height: 54px; }
+  .specialty-selection { min-height: 58px; }
+  .credit-banner { margin-top: 12px; padding: 9px 10px; font-size: 8px; }
+  .page-footer span:last-child { text-align: left; }
+}

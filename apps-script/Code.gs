@@ -8,7 +8,7 @@ const APP = {
   },
   headers: {
     Clinics: ['id','name','short_name','is_active','created_at'],
-    Physicians: ['id','display_name','is_placeholder','is_active','notes','created_at','updated_at'],
+    Physicians: ['id','display_name','is_placeholder','is_active','notes','created_at','updated_at','clinic_id'],
     Users: ['id','email','display_name','role','physician_id','is_active','last_active_at','created_at'],
     ScheduleTemplates: ['id','clinic_id','physician_id','weekday','week_of_month','start_time','end_time','appointment_quota','effective_from','effective_until','is_active','admin_note','created_at','updated_at'],
     Sessions: ['id','source_template_id','clinic_id','physician_id','replaces_physician_id','session_date','start_time','end_time','appointment_quota','appointment_count','appointment_updated_at','session_status','cancellation_reason','doctor_response_status','doctor_response_note','doctor_responded_at','admin_resolution_note','resolved_by','resolved_at','created_by','created_at','updated_at'],
@@ -40,18 +40,40 @@ function apiCall(action, payload, credential) {
 }
 
 function publicPhysicians_() {
-  return records_('Physicians').filter(function(row) { return row.is_active && !row.is_placeholder; })
-    .map(function(row) { return { id: row.id, display_name: row.display_name }; })
-    .sort(function(a,b) { return a.display_name.localeCompare(b.display_name, 'th'); });
+  const groups = ensurePhysicianDirectory_();
+  const groupMap = {};
+  groups.forEach(function(group) { groupMap[group.clinic_id] = group; });
+  return records_('Physicians').filter(function(row) { return row.is_active && !row.is_placeholder && groupMap[row.clinic_id]; })
+    .map(function(row) {
+      const group = groupMap[row.clinic_id];
+      return { id: row.id, display_name: row.display_name, clinic_id: row.clinic_id, clinic_label: group.label, clinic_color: group.color };
+    })
+    .sort(function(a,b) {
+      const groupOrder = groups.findIndex(function(group) { return group.clinic_id === a.clinic_id; }) - groups.findIndex(function(group) { return group.clinic_id === b.clinic_id; });
+      return groupOrder || a.display_name.localeCompare(b.display_name, 'th');
+    });
 }
 
 // Role selection creates a short server-signed session; it does not verify a person's identity.
 function startRoleSession_(request) {
-  const role = String(request.role || '');
+  const role = String(request.role || '').trim().toLowerCase();
   let user;
   if (role === 'admin') {
-    user = records_('Users').find(function(row) { return row.role === 'admin' && row.is_active; });
-    if (!user) throw new Error('ยังไม่มีผู้ดูแลในชีต Users กรุณาให้ผู้ดูแลเพิ่มข้อมูลก่อน');
+    const users = records_('Users');
+    user = users.find(function(row) { return String(row.role || '').trim().toLowerCase() === 'admin' && row.is_active !== false; });
+    if (user) {
+      if (user.role !== 'admin' || user.is_active !== true || !user.display_name) writeFields_('Users', user._row, { display_name: user.display_name || 'ผู้ดูแล', role: 'admin', is_active: true });
+      user.display_name = user.display_name || 'ผู้ดูแล'; user.role = 'admin'; user.is_active = true;
+    } else {
+      user = users.find(function(row) { return String(row.id || '') === 'mode-admin'; });
+      if (user) {
+        writeFields_('Users', user._row, { display_name: user.display_name || 'ผู้ดูแล', role: 'admin', is_active: true });
+        user.display_name = user.display_name || 'ผู้ดูแล'; user.role = 'admin'; user.is_active = true;
+      } else {
+        appendRecord_('Users', { id: 'mode-admin', email: '', display_name: 'ผู้ดูแล', role: 'admin', is_active: true, last_active_at: null, created_at: new Date().toISOString() });
+        user = records_('Users').find(function(row) { return String(row.id || '') === 'mode-admin'; });
+      }
+    }
   } else if (role === 'physician') {
     const physicianId = String(request.physician_id || '');
     const physician = records_('Physicians').find(function(row) { return row.id === physicianId && row.is_active && !row.is_placeholder; });
@@ -203,7 +225,7 @@ function insert_(user, table, values) {
   const list = Array.isArray(values) ? values : [values];
   const allowed = {
     clinics: ['name','short_name','is_active'],
-    physicians: ['display_name','is_placeholder','is_active','notes'],
+    physicians: ['display_name','is_placeholder','is_active','notes','clinic_id'],
     schedule_templates: ['clinic_id','physician_id','weekday','week_of_month','start_time','end_time','appointment_quota','effective_from','effective_until','is_active','admin_note'],
   }[table];
   if (!allowed) throw new Error('ไม่อนุญาตให้เพิ่มแถวในตารางนี้');
@@ -242,7 +264,7 @@ function update_(user, table, patch, filters) {
     requireAdmin_(user);
     allowed = {
       clinics: ['name','short_name','is_active'],
-      physicians: ['display_name','is_placeholder','is_active','notes'],
+      physicians: ['display_name','is_placeholder','is_active','notes','clinic_id'],
       schedule_templates: ['appointment_quota','start_time','end_time','is_active','effective_until','admin_note'],
       schedule_sessions: ['appointment_quota','appointment_count','session_status','cancellation_reason','doctor_response_status','doctor_response_note','doctor_responded_at','admin_resolution_note','resolved_by','resolved_at','physician_id','replaces_physician_id'],
     }[table];
