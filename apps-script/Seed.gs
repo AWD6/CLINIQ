@@ -3,7 +3,7 @@ function physicianDirectoryGroups_() {
     { clinicName: 'ต่อมไร้ท่อ', shortName: 'ต่อมไร้ท่อ', label: 'คลินิกต่อมไร้ท่อ (Endocrine)', color: 'violet', aliases: ['คลินิกต่อมไร้ท่อ','Endocrine'], doctors: [
       ['อ.วรผกา',['ศ.ดร.พญ.วรพกา']], ['อ.กฤตธี',[]], ['อ.นิพาวรรณ',[]], ['อ.สิทธิกุล',[]], ['อ.ศุภวรรณ',['รศ.พญ.ศุภวรรณ']], ['อ.เมตตาภรณ์',['รศ.พญ.เมตตาภรณ์']], ['อ.พิธพร',['พญ.พีรพร']], ['อ.วิศวะ',['นพ.วิศวะ']], ['อ.ณัฐวุฒิ',['นพ.ณัฐวุฒิ']],
     ]},
-    { clinicName: 'ระบบไต', shortName: 'ไต', label: 'คลินิกไต (Nephro)', color: 'teal', aliases: ['คลินิกไต','Nephro'], doctors: [
+    { clinicName: 'ไต', shortName: 'ไต', label: 'คลินิกไต (Nephro)', color: 'teal', aliases: ['ระบบไต','คลินิกไต','Nephro'], doctors: [
       ['อ.ขจรศักดิ์',[]], ['อ.กานต์',[]], ['อ.ยุติธรรม',['นพ.ยุติธรรม']], ['อ.ดิเรก',['นพ.ดิเรก']], ['อ.สุรเชษฐ์',['ผศ.นพ.สุรเชษฐ์']], ['อ.ภูมิ',['นพ.ภูมิ']],
     ]},
     { clinicName: 'หัวใจ', shortName: 'หัวใจ', label: 'คลินิกหัวใจ (Cardio)', color: 'rose', aliases: ['คลินิกหัวใจ','Cardio'], doctors: [
@@ -53,6 +53,10 @@ function ensurePhysicianDirectory_() {
         clinic = { id: Utilities.getUuid(), name: group.clinicName, short_name: group.shortName, is_active: true, created_at: new Date().toISOString() };
         appendRecord_('Clinics', clinic);
         clinicRows.push(clinic);
+      } else if (clinic.name !== group.clinicName || clinic.short_name !== group.shortName) {
+        writeFields_('Clinics', clinic._row, { name: group.clinicName, short_name: group.shortName });
+        clinic.name = group.clinicName;
+        clinic.short_name = group.shortName;
       }
       group.clinic_id = clinic.id;
     });
@@ -96,14 +100,14 @@ function ensurePhysicianDirectory_() {
 // Unclear schedule slots remain placeholders; no days are inferred from the doctor list.
 function seedDemoData() {
   const clinics = [
-    ['ต่อมไร้ท่อ','ต่อมไร้ท่อ'], ['ระบบไต','ไต'], ['หัวใจ','หัวใจ'],
+    ['ต่อมไร้ท่อ','ต่อมไร้ท่อ'], ['ไต','ไต'], ['หัวใจ','หัวใจ'],
     ['กระดูก','กระดูก'], ['ผู้สูงอายุ','ผู้สูงอายุ'], ['ศัลยกรรม','ศัลยกรรม'],
   ];
   ensurePhysicianDirectory_();
   const doctors = [
     '[รอยืนยันชื่อ] ต่อมไร้ท่อ จันทร์ 2', '[รอยืนยันชื่อ] ต่อมไร้ท่อ อังคาร 1', '[รอยืนยันชื่อ] ต่อมไร้ท่อ อังคาร 2',
-    '[รอยืนยันชื่อ] ระบบไต จันทร์ 1', '[รอยืนยันชื่อ] ระบบไต จันทร์ 2', '[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 1',
-    '[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 2', '[รอยืนยันชื่อ] ระบบไต เสาร์ 1', '[รอยืนยันชื่อ] หัวใจ จันทร์',
+    '[รอยืนยันชื่อ] ไต จันทร์ 1', '[รอยืนยันชื่อ] ไต จันทร์ 2', '[รอยืนยันชื่อ] ไต พฤหัสบดี 1',
+    '[รอยืนยันชื่อ] ไต พฤหัสบดี 2', '[รอยืนยันชื่อ] ไต เสาร์ 1', '[รอยืนยันชื่อ] หัวใจ จันทร์',
     '[รอยืนยันชื่อ] หัวใจ อังคาร', '[รอยืนยันชื่อ] หัวใจ เสาร์',
   ];
   const slots = [
@@ -111,10 +115,10 @@ function seedDemoData() {
     ['ต่อมไร้ท่อ','[รอยืนยันชื่อ] ต่อมไร้ท่อ อังคาร 1',2,0], ['ต่อมไร้ท่อ','[รอยืนยันชื่อ] ต่อมไร้ท่อ อังคาร 2',2,0],
     ['ต่อมไร้ท่อ','อ.ศุภวรรณ',3,0], ['ต่อมไร้ท่อ','อ.เมตตาภรณ์',4,0], ['ต่อมไร้ท่อ','อ.พิธพร',5,1],
     ['ต่อมไร้ท่อ','อ.วิศวะ',5,1], ['ต่อมไร้ท่อ','อ.วรผกา',6,0], ['ต่อมไร้ท่อ','อ.ณัฐวุฒิ',6,0],
-    ['ระบบไต','[รอยืนยันชื่อ] ระบบไต จันทร์ 1',1,0], ['ระบบไต','[รอยืนยันชื่อ] ระบบไต จันทร์ 2',1,0],
-    ['ระบบไต','อ.ยุติธรรม',2,0], ['ระบบไต','อ.ยุติธรรม',3,0], ['ระบบไต','[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 1',4,0],
-    ['ระบบไต','[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 2',4,0], ['ระบบไต','อ.ดิเรก',5,0], ['ระบบไต','อ.สุรเชษฐ์',5,0],
-    ['ระบบไต','[รอยืนยันชื่อ] ระบบไต เสาร์ 1',6,0], ['ระบบไต','อ.ภูมิ',6,0],
+    ['ไต','[รอยืนยันชื่อ] ไต จันทร์ 1',1,0], ['ไต','[รอยืนยันชื่อ] ไต จันทร์ 2',1,0],
+    ['ไต','อ.ยุติธรรม',2,0], ['ไต','อ.ยุติธรรม',3,0], ['ไต','[รอยืนยันชื่อ] ไต พฤหัสบดี 1',4,0],
+    ['ไต','[รอยืนยันชื่อ] ไต พฤหัสบดี 2',4,0], ['ไต','อ.ดิเรก',5,0], ['ไต','อ.สุรเชษฐ์',5,0],
+    ['ไต','[รอยืนยันชื่อ] ไต เสาร์ 1',6,0], ['ไต','อ.ภูมิ',6,0],
     ['หัวใจ','[รอยืนยันชื่อ] หัวใจ จันทร์',1,0], ['หัวใจ','[รอยืนยันชื่อ] หัวใจ อังคาร',2,0],
     ['หัวใจ','อ.ศรัณย์',4,0], ['หัวใจ','อ.กฤษณ์',4,0], ['หัวใจ','[รอยืนยันชื่อ] หัวใจ เสาร์',6,0],
     ['กระดูก','อ.พิชิตชัย',1,0], ['กระดูก','อ.พิชิตชัย',6,0],
@@ -131,6 +135,21 @@ function seedDemoData() {
   });
   const doctorMap = {};
   records_('Physicians').forEach(function(row) { doctorMap[row.display_name] = row.id; });
+  [
+    ['[รอยืนยันชื่อ] ระบบไต จันทร์ 1','[รอยืนยันชื่อ] ไต จันทร์ 1'],
+    ['[รอยืนยันชื่อ] ระบบไต จันทร์ 2','[รอยืนยันชื่อ] ไต จันทร์ 2'],
+    ['[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 1','[รอยืนยันชื่อ] ไต พฤหัสบดี 1'],
+    ['[รอยืนยันชื่อ] ระบบไต พฤหัสบดี 2','[รอยืนยันชื่อ] ไต พฤหัสบดี 2'],
+    ['[รอยืนยันชื่อ] ระบบไต เสาร์ 1','[รอยืนยันชื่อ] ไต เสาร์ 1'],
+  ].forEach(function(rename) {
+    const oldName = rename[0]; const newName = rename[1];
+    const oldRow = records_('Physicians').find(function(row) { return row.display_name === oldName && row.is_placeholder; });
+    const alreadyExists = records_('Physicians').some(function(row) { return row.display_name === newName; });
+    if (oldRow && !alreadyExists) {
+      writeFields_('Physicians', oldRow._row, { display_name: newName, updated_at: new Date().toISOString() });
+      delete doctorMap[oldName]; doctorMap[newName] = oldRow.id;
+    }
+  });
   doctors.forEach(function(name) {
     if (!doctorMap[name]) {
       const row = { id: Utilities.getUuid(), display_name: name, is_placeholder: true, is_active: true, notes: 'ชื่ออ่านไม่ชัดจากภาพ ต้องให้ผู้ดูแลยืนยัน', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
@@ -144,5 +163,6 @@ function seedDemoData() {
     const saturday = slot[2] === 6;
     const row = { id: Utilities.getUuid(), clinic_id: clinicMap[slot[0]], physician_id: doctorMap[slot[1]], weekday: slot[2], week_of_month: slot[3], start_time: saturday ? '08:00:00' : '16:00:00', end_time: saturday ? '12:00:00' : '20:00:00', appointment_quota: 20, effective_from: bangkokToday_(), effective_until: null, is_active: true, admin_note: 'ตัวอย่าง: ยืนยันชื่อและโควตาก่อนใช้จริง', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     appendRecord_('ScheduleTemplates', row);
+    invalidateSessionGeneration_();
   });
 }

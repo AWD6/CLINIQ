@@ -227,8 +227,6 @@ function insert_(user, table, values) {
   requireAdmin_(user);
   const list = Array.isArray(values) ? values : [values];
   const allowed = {
-    clinics: ['name','short_name','is_active'],
-    physicians: ['display_name','is_placeholder','is_active','notes','clinic_id'],
     schedule_templates: ['clinic_id','physician_id','weekday','week_of_month','start_time','end_time','appointment_quota','effective_from','effective_until','is_active','admin_note'],
   }[table];
   if (!allowed) throw new Error('ไม่อนุญาตให้เพิ่มแถวในตารางนี้');
@@ -251,6 +249,7 @@ function insert_(user, table, values) {
       created.push(stripInternal_(row));
     });
   } finally { lock.releaseLock(); }
+  if (table === 'schedule_templates' && created.length) invalidateSessionGeneration_();
   return created;
 }
 
@@ -292,6 +291,7 @@ function update_(user, table, patch, filters) {
       if (table === 'schedule_sessions' && old.physician_id !== next.physician_id) notifyAssignment_(next);
     });
   } finally { lock.releaseLock(); }
+  if (current.length && ['clinics','physicians','schedule_templates'].includes(table)) invalidateSessionGeneration_();
   return current.map(function(row) { return Object.assign(stripInternal_(row), safePatch); });
 }
 
@@ -304,14 +304,34 @@ function canChangeRow_(user, table, row) {
 
 function rpc_(user, request) {
   const args = request.args || {};
-  if (request.name === 'load_workspace') { generateDueNotifications_(user); return loadWorkspace_(user); }
+  if (request.name === 'load_workspace') {
+    migrateUnverifiedAppointmentCounts_();
+    ensureUpcomingSessions_(user);
+    generateDueNotifications_(user);
+    return loadWorkspace_(user);
+  }
   if (request.name === 'touch_last_active') { touchLastActive_(user); return null; }
   if (request.name === 'generate_schedule_sessions') {
     requireAdmin_(user);
     return generateSessions_(user, args.p_from || bangkokToday_(), args.p_to || addDays_(bangkokToday_(), 30));
   }
   if (request.name === 'respond_to_session') return respondToSession_(user, args.p_session_id, args.p_response, args.p_note);
+  if (request.name === 'request_extra_session') return requestExtraSession_(user, args);
   throw new Error('ไม่รู้จักคำสั่งนี้');
+}
+
+function migrateUnverifiedAppointmentCounts_() {
+  if (APP.properties.getProperty('APPOINTMENT_CHECK_MIGRATED') === 'done') return;
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    if (APP.properties.getProperty('APPOINTMENT_CHECK_MIGRATED') === 'done') return;
+    records_('Sessions').forEach(function(row) {
+      if (row.source_template_id && row.appointment_updated_at && row.created_at && String(row.appointment_updated_at) === String(row.created_at)) {
+        writeFields_('Sessions', row._row, { appointment_updated_at: null });
+      }
+    });
+    if (APP.properties.setProperty) APP.properties.setProperty('APPOINTMENT_CHECK_MIGRATED', 'done');
+  } finally { lock.releaseLock(); }
 }
 
 function loadWorkspace_(user) {
@@ -344,6 +364,25 @@ function loadWorkspace_(user) {
   return { profile: publicUser_(user), clinics: clinics.map(stripInternal_), physicians: physicians.map(stripInternal_), templates: [], sessions: sessions, notifications: notifications, events: [], profiles: [] };
 }
 
+function ensureUpcomingSessions_(user) {
+  const today = bangkokToday_();
+  const through = addDays_(today, 30);
+  const storedThrough = APP.properties.getProperty('SESSIONS_GENERATED_THROUGH') || '';
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(storedThrough) && storedThrough >= today
+    ? addDays_(storedThrough, 1)
+    : today;
+  if (from <= through) {
+    const scheduleActor = user.role === 'admin' ? user : records_('Users').find(function(row) { return row.role === 'admin' && row.is_active; }) || { id: 'schedule-system', role: 'admin', display_name: 'ระบบตาราง' };
+    generateSessions_(scheduleActor, from, through);
+  }
+  if (APP.properties.setProperty) APP.properties.setProperty('SESSIONS_GENERATED_THROUGH', through);
+}
+
+function invalidateSessionGeneration_() {
+  if (APP.properties.deleteProperty) APP.properties.deleteProperty('SESSIONS_GENERATED_THROUGH');
+  else if (APP.properties.setProperty) APP.properties.setProperty('SESSIONS_GENERATED_THROUGH', '');
+}
+
 function generateSessions_(user, fromDate, toDate) {
   const today = bangkokToday_();
   if (fromDate > toDate || fromDate < today || toDate > addDays_(today, 30)) throw new Error('สร้างรอบตรวจได้ล่วงหน้าไม่เกิน 30 วัน');
@@ -364,7 +403,7 @@ function generateSessions_(user, fromDate, toDate) {
         const key = template.id + '|' + date;
         if (existing.has(key)) return;
         const now = new Date().toISOString();
-        const row = { id: Utilities.getUuid(), source_template_id: template.id, clinic_id: template.clinic_id, physician_id: template.physician_id, replaces_physician_id: null, session_date: date, start_time: template.start_time, end_time: template.end_time, appointment_quota: Number(template.appointment_quota || 0), appointment_count: 0, appointment_updated_at: now, session_status: 'scheduled', cancellation_reason: null, doctor_response_status: 'pending', doctor_response_note: null, doctor_responded_at: null, admin_resolution_note: null, resolved_by: null, resolved_at: null, created_by: user.id, created_at: now, updated_at: now };
+        const row = { id: Utilities.getUuid(), source_template_id: template.id, clinic_id: template.clinic_id, physician_id: template.physician_id, replaces_physician_id: null, session_date: date, start_time: template.start_time, end_time: template.end_time, appointment_quota: Number(template.appointment_quota || 0), appointment_count: 0, appointment_updated_at: null, session_status: 'scheduled', cancellation_reason: null, doctor_response_status: 'pending', doctor_response_note: null, doctor_responded_at: null, admin_resolution_note: null, resolved_by: null, resolved_at: null, created_by: user.id, created_at: now, updated_at: now };
         appendRecord_('Sessions', row); existing.add(key); count++;
         logEvent_(user, 'insert', 'Sessions', row.id, null, row);
       });
@@ -372,6 +411,43 @@ function generateSessions_(user, fromDate, toDate) {
     }
   } finally { lock.releaseLock(); }
   return count;
+}
+
+function requestExtraSession_(user, args) {
+  if (user.role !== 'physician' || !user.physician_id) throw new Error('คำสั่งนี้สำหรับแพทย์');
+  const physician = records_('Physicians').find(function(row) { return row.id === user.physician_id && row.is_active && !row.is_placeholder; });
+  if (!physician || !physician.clinic_id) throw new Error('ไม่พบข้อมูลคลินิกของคุณ กรุณาติดต่อพยาบาล');
+  const date = String(args.p_session_date || '');
+  const startTime = String(args.p_start_time || '');
+  const endTime = String(args.p_end_time || '');
+  const note = String(args.p_note || '').trim();
+  const today = bangkokToday_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > addDays_(today, 30)) throw new Error('เลือกวันที่ตั้งแต่วันนี้ถึง 30 วันข้างหน้า');
+  const parsedDate = new Date(date + 'T12:00:00Z');
+  if (isNaN(parsedDate.getTime()) || Utilities.formatDate(parsedDate, 'UTC', 'yyyy-MM-dd') !== date) throw new Error('วันที่ที่เลือกไม่ถูกต้อง');
+  const validTime = function(value) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value); };
+  if (!validTime(startTime) || !validTime(endTime) || endTime <= startTime) throw new Error('กรุณาตรวจสอบเวลาเริ่มและเวลาสิ้นสุด');
+  if (note.length > 500) throw new Error('หมายเหตุยาวเกิน 500 ตัวอักษร');
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  let created;
+  try {
+    const duplicate = records_('Sessions').some(function(row) {
+      return row.physician_id === physician.id && row.session_date === date && row.session_status === 'scheduled';
+    });
+    if (duplicate) throw new Error('วันนี้มีรอบตรวจของคุณอยู่แล้ว');
+    const now = new Date().toISOString();
+    created = {
+      id: Utilities.getUuid(), source_template_id: null, clinic_id: physician.clinic_id, physician_id: physician.id,
+      replaces_physician_id: null, session_date: date, start_time: startTime + ':00', end_time: endTime + ':00',
+      appointment_quota: 0, appointment_count: 0, appointment_updated_at: null, session_status: 'scheduled',
+      cancellation_reason: null, doctor_response_status: 'confirmed', doctor_response_note: note || null,
+      doctor_responded_at: now, admin_resolution_note: null, resolved_by: null, resolved_at: null,
+      created_by: user.id, created_at: now, updated_at: now,
+    };
+    appendRecord_('Sessions', created);
+    logEvent_(user, 'insert', 'Sessions', created.id, null, created);
+  } finally { lock.releaseLock(); }
+  return stripInternal_(created);
 }
 
 function generateDueNotifications_(user) {
@@ -390,11 +466,22 @@ function generateDueNotifications_(user) {
         const kind = 'reminder_' + days;
         const key = target.id + '|' + session.id + '|' + kind;
         if (existing.has(key)) return;
-        appendRecord_('Notifications', { id: Utilities.getUuid(), user_id: target.id, physician_id: target.physician_id, session_id: session.id, kind: kind, title: 'ยืนยันรอบตรวจในอีก ' + days + ' วัน', body: 'กรุณาตรวจสอบตารางออกตรวจและแจ้งพยาบาลผู้ดูแลหากติดภารกิจ', created_at: new Date().toISOString(), read_at: null });
+        const body = notificationSessionDetails_(session) + ' แตะเพื่อเปิดรอบตรวจและยืนยัน หรือแจ้งติดภารกิจ';
+        appendRecord_('Notifications', { id: Utilities.getUuid(), user_id: target.id, physician_id: target.physician_id, session_id: session.id, kind: kind, title: 'ยืนยันรอบตรวจในอีก ' + days + ' วัน', body: body, created_at: new Date().toISOString(), read_at: null });
         existing.add(key);
       });
     });
   } finally { lock.releaseLock(); }
+}
+
+function notificationSessionDetails_(session) {
+  const clinic = records_('Clinics').find(function(row) { return row.id === session.clinic_id; });
+  const date = new Date(session.session_date + 'T12:00:00Z');
+  const weekdays = ['วันอาทิตย์','วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
+  const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dateLabel = weekdays[date.getUTCDay()] + 'ที่ ' + Number(session.session_date.slice(8,10)) + ' ' + months[date.getUTCMonth()] + ' ' + (date.getUTCFullYear() + 543);
+  const timeLabel = String(session.start_time || '').slice(0,5) + '–' + String(session.end_time || '').slice(0,5) + ' น.';
+  return (clinic ? clinic.name : 'คลินิก') + ' · ' + dateLabel + ' · ' + timeLabel;
 }
 
 function respondToSession_(user, sessionId, response, note) {
@@ -419,7 +506,7 @@ function respondToSession_(user, sessionId, response, note) {
 function notifyAssignment_(session) {
   const targets = records_('Users').filter(function(row) { return row.role === 'physician' && row.physician_id === session.physician_id && row.is_active; });
   targets.forEach(function(target) {
-    appendRecord_('Notifications', { id: Utilities.getUuid(), user_id: target.id, physician_id: target.physician_id, session_id: session.id, kind: 'assignment_changed', title: 'มีการเปลี่ยนแปลงรอบตรวจ', body: 'พยาบาลผู้ดูแลปรับข้อมูลผู้รับผิดชอบรอบตรวจ กรุณาเปิดตารางเพื่อตรวจสอบ', created_at: new Date().toISOString(), read_at: null });
+    appendRecord_('Notifications', { id: Utilities.getUuid(), user_id: target.id, physician_id: target.physician_id, session_id: session.id, kind: 'assignment_changed', title: 'มีการเปลี่ยนแปลงรอบตรวจ', body: notificationSessionDetails_(session) + ' · แตะเพื่อเปิดตารางและตรวจสอบ', created_at: new Date().toISOString(), read_at: null });
   });
 }
 

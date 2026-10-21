@@ -63,7 +63,7 @@ function ConfigNotice() {
 function BrandMark({ large = false }) {
   return <div className={`brand-mark ${large ? 'brand-mark-large' : ''}`}>
     <div className="brand-symbol"><Stethoscope size={large ? 28 : 20} strokeWidth={2.3} /></div>
-    <div><strong>CLINIQ</strong><span>คลินิกเฉพาะทางนอกเวลา · โรงพยาบาลมหาราชนครเชียงใหม่</span></div>
+    <div><strong>CLINIQ</strong><span>คลินิกเฉพาะทางนอกเวลา</span></div>
   </div>
 }
 
@@ -226,11 +226,18 @@ function Workspace({ session, profile, initialData }) {
       setTab('sessions')
     }
     const openNotifications = () => { if (!admin) setTab('notifications') }
+    const openDoctorSession = (event) => {
+      if (admin) return
+      setFocusSessionId(event.detail?.sessionId || '')
+      setTab('overview')
+    }
     window.addEventListener('open-admin-sessions', openSessions)
     window.addEventListener('go-notifications', openNotifications)
+    window.addEventListener('open-doctor-session', openDoctorSession)
     return () => {
       window.removeEventListener('open-admin-sessions', openSessions)
       window.removeEventListener('go-notifications', openNotifications)
+      window.removeEventListener('open-doctor-session', openDoctorSession)
     }
   }, [admin])
 
@@ -254,13 +261,13 @@ function Workspace({ session, profile, initialData }) {
     {mobileNav && <button aria-label="ปิดเมนู" className="mobile-scrim" onClick={() => setMobileNav(false)} />}
     <div className="main-column">
       <header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu size={20} /></button><div className="breadcrumbs"><span>คลินิกเฉพาะทางนอกเวลา</span><ArrowRight size={13} /><strong>{nav.find((item) => item.id === activeTab)?.label}</strong></div>
-        <div className="top-actions"><div className="live-indicator"><span />อัปเดตเมื่อเปิดเว็บ</div><button className={`icon-button refresh-button ${refreshing ? 'spin' : ''}`} title="โหลดข้อมูลใหม่" onClick={() => refresh(true)}><RefreshCw size={17} /></button><div className="top-avatar">{profile.display_name?.slice(0, 1) || 'ผ'}</div></div>
+        <div className="top-actions"><div className="live-indicator"><span />อัปเดตเมื่อเปิดเว็บ</div><button className={`icon-button refresh-button ${refreshing ? 'spin' : ''}`} title="โหลดข้อมูลใหม่" onClick={() => refresh(true)}><RefreshCw size={17} /></button><div className={`top-avatar ${!admin ? 'top-avatar-name' : ''}`}>{!admin ? profile.display_name : profile.display_name?.slice(0, 1) || 'พ'}</div></div>
       </header>
       <main className="content-area">
         {error && <div className="page-alert"><AlertCircle size={17} /><span>{error}</span><button className="text-button" onClick={() => refresh()}>ลองอีกครั้ง</button></div>}
         {loading ? <div className="content-loading"><div className="spinner" /><span>กำลังโหลดข้อมูล</span></div> : admin
           ? <AdminContent tab={activeTab} data={data} refresh={() => refresh(true)} session={session} profile={profile} focusSessionId={focusSessionId} clearFocusSession={() => setFocusSessionId('')} />
-          : <DoctorContent tab={activeTab} data={data} refresh={() => refresh(true)} profile={profile} />}
+          : <DoctorContent tab={activeTab} data={data} refresh={() => refresh(true)} profile={profile} focusSessionId={focusSessionId} clearFocusSession={() => setFocusSessionId('')} />}
       </main>
           <footer className="page-footer"><span>CLINIQ · ข้อมูลอัปเดตเมื่อเปิดหน้าเว็บ</span><span>conceived, designed and Brought to life by RN.Patipon Wiyo · เวลาไทย</span></footer>
     </div>
@@ -287,17 +294,19 @@ function AdminOverview({ data, refresh, profile }) {
   const upcoming30 = data.sessions.filter((s) => s.session_status === 'scheduled' && s.session_date >= today() && s.session_date <= addDays(today(), 30))
   const busy = data.sessions.filter((s) => s.doctor_response_status === 'busy' && !s.resolved_at && s.session_status === 'scheduled')
   const awaiting = data.sessions.filter((s) => s.session_status === 'scheduled' && s.doctor_response_status === 'pending' && s.session_date >= today() && s.session_date <= addDays(today(), 3))
+  const needsAppointmentCheck = data.sessions.filter((s) => s.session_status === 'scheduled' && s.session_date >= today() && s.session_date <= addDays(today(), 30) && !s.appointment_updated_at)
   const placeholders = data.physicians.filter((p) => p.is_placeholder && p.is_active).length
   const profilesByPhysician = new Map(data.profiles.map((p) => [p.physician_id, p]))
   const clinicMap = new Map(data.clinics.map((c) => [c.id, c.name]))
   const physicianMap = new Map(data.physicians.map((p) => [p.id, p.display_name]))
   const tasks = [
     ...busy.map((s) => ({ id: `busy-${s.id}`, icon: AlertCircle, tone: 'rose', title: `ติดภารกิจ · ${physicianMap.get(s.physician_id) || 'แพทย์'}`, detail: `${clinicMap.get(s.clinic_id)} · ${dateText(s.session_date, { day: 'numeric', month: 'short' })} · ${s.doctor_response_note || 'ยังไม่มีหมายเหตุ'}`, session: s })),
+    ...needsAppointmentCheck.map((s) => ({ id: `count-${s.id}`, icon: Users, tone: 'teal', title: `${s.source_template_id ? 'รอตรวจยอดนัด' : 'แพทย์ขอเพิ่มวัน · รอตรวจยอด'} · ${physicianMap.get(s.physician_id) || 'แพทย์'}`, detail: `${clinicMap.get(s.clinic_id)} · ${dateText(s.session_date, { day: 'numeric', month: 'short', weekday: 'short' })}${s.doctor_response_note ? ` · ${s.doctor_response_note}` : ''}`, session: s, action: 'ตรวจยอด' })),
     ...awaiting.map((s) => ({ id: `await-${s.id}`, icon: Clock3, tone: 'amber', title: `ใกล้วันตรวจแต่ยังไม่ยืนยัน · ${physicianMap.get(s.physician_id) || 'แพทย์'}`, detail: `${clinicMap.get(s.clinic_id)} · ${dateText(s.session_date, { day: 'numeric', month: 'short' })}`, session: s })),
   ]
   return <>
-    <PageTitle eyebrow="แดชบอร์ดพยาบาล" title="Dashboard" description="ดูตาราง ยอดนัด และรายการที่ต้องติดตาม" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจล่วงหน้า 30 วัน</button>} />
-    <div className="welcome-strip"><div><span className="welcome-icon"><CalendarDays size={20} /></span><div><strong>วันนี้ {dateText(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><small>สร้างรอบจากตารางประจำได้ไม่เกิน 30 วัน</small></div></div><button className="button button-outline" onClick={() => generateNextSessions(refresh)}><RefreshCw size={16} />สร้างตาราง</button></div>
+    <PageTitle eyebrow="แดชบอร์ดพยาบาล" title="Dashboard" description="ดูตาราง ยอดนัด และรายการที่ต้องติดตาม" />
+    <div className="welcome-strip"><div><span className="welcome-icon"><CalendarDays size={20} /></span><div><strong>วันนี้ {dateText(today(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong><small>ตารางประจำแสดงให้อัตโนมัติล่วงหน้า 30 วัน</small></div></div></div>
     <div className="stats-grid">
       <StatCard label="รอบตรวจ 30 วัน" value={upcoming30.length} note="ทุกคลินิก" icon={CalendarDays} tone="teal" />
       <StatCard label="รอยืนยันใกล้ถึงวัน" value={awaiting.length} note="ภายใน 3 วัน" icon={Clock3} tone="amber" />
@@ -306,7 +315,7 @@ function AdminOverview({ data, refresh, profile }) {
     </div>
     <div className="dashboard-columns">
       <section className="panel task-panel"><div className="panel-header"><div><h2>งานที่ต้องติดตาม</h2><p>กรณีที่ต้องประสานกับแพทย์หรือบันทึกผล</p></div><span className={`count-pill ${tasks.length ? 'count-warn' : ''}`}>{tasks.length} รายการ</span></div>
-        {tasks.length ? <div className="task-list">{tasks.slice(0, 6).map((task) => <div className="task-row" key={task.id}><div className={`task-icon ${task.tone}`}><task.icon size={17} /></div><div className="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></div><button className="button button-small button-outline" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions', { detail: { sessionId: task.session.id } }))}>ติดตาม</button></div>)}</div> : <EmptyState icon={CheckCheck} title="ไม่มีงานค้าง" description="รายการที่ต้องติดตามจะแสดงที่นี่" />}
+        {tasks.length ? <div className="task-list">{tasks.slice(0, 8).map((task) => <div className="task-row" key={task.id}><div className={`task-icon ${task.tone}`}><task.icon size={17} /></div><div className="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></div><button className="button button-small button-outline" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions', { detail: { sessionId: task.session.id } }))}>{task.action || 'ติดตาม'}</button></div>)}</div> : <EmptyState icon={CheckCheck} title="ไม่มีงานค้าง" description="รายการที่ต้องติดตามจะแสดงที่นี่" />}
       </section>
       <section className="panel activity-panel"><div className="panel-header"><div><h2>แพทย์เข้าเว็บล่าสุด</h2><p>ถ้ายังไม่เข้ามา พยาบาลติดตามได้จากรายการนี้</p></div><span className="subtle-tag">อัปเดตขณะเปิดเว็บ</span></div>
         <div className="last-active-list">{data.profiles.filter((p) => p.role === 'physician').slice(0, 7).map((p) => {
@@ -317,7 +326,7 @@ function AdminOverview({ data, refresh, profile }) {
       </section>
     </div>
     <section className="panel upcoming-panel"><div className="panel-header"><div><h2>รอบตรวจถัดไป</h2><p>แสดงข้อมูลนัดรวมและการยืนยันของแพทย์</p></div><button className="text-button" onClick={() => window.dispatchEvent(new CustomEvent('open-admin-sessions'))}>ดูตารางทั้งหมด <ArrowRight size={15} /></button></div>
-      {next.length ? <div className="table-wrap"><table><thead><tr><th>วันและเวลา</th><th>คลินิก</th><th>แพทย์</th><th>ยอดนัด / โควตา</th><th>ยืนยัน</th></tr></thead><tbody>{next.map((s) => <tr key={s.id}><td><strong>{dateText(s.session_date, { day: 'numeric', month: 'short', weekday: 'short' })}</strong><span className="table-sub">{timeText(s.start_time)}–{timeText(s.end_time)} น.</span></td><td><span className="clinic-label"><i className={`clinic-dot ${clinicColor[data.clinics.findIndex((c) => c.id === s.clinic_id) % clinicColor.length]}`} />{clinicMap.get(s.clinic_id)}</span></td><td><strong>{physicianMap.get(s.physician_id) || 'ไม่พบชื่อ'}</strong>{profilesByPhysician.get(s.physician_id)?.last_active_at && <span className="table-sub">เข้าเว็บ {dateTimeText(profilesByPhysician.get(s.physician_id).last_active_at)}</span>}</td><td><div className="quota-cell"><strong>{s.appointment_count}</strong><span>/ {s.appointment_quota}</span><div className="quota-track"><i style={{ width: `${Math.min(100, s.appointment_quota ? s.appointment_count / s.appointment_quota * 100 : 0)}%` }} /></div></div></td><td><ResponseBadge status={s.doctor_response_status} /></td></tr>)}</tbody></table></div> : <EmptyState icon={CalendarDays} title="ยังไม่มีรอบตรวจที่สร้างไว้" description="กด “สร้างรอบตรวจล่วงหน้า 30 วัน” เพื่อสร้างรอบจากตารางประจำ" />}
+      {next.length ? <div className="table-wrap"><table><thead><tr><th>วันและเวลา</th><th>คลินิก</th><th>แพทย์</th><th>ยอดนัด / โควตา</th><th>ยืนยัน</th></tr></thead><tbody>{next.map((s) => <tr key={s.id}><td><strong>{dateText(s.session_date, { day: 'numeric', month: 'short', weekday: 'short' })}</strong><span className="table-sub">{timeText(s.start_time)}–{timeText(s.end_time)} น.</span></td><td><span className="clinic-label"><i className={`clinic-dot ${clinicColor[data.clinics.findIndex((c) => c.id === s.clinic_id) % clinicColor.length]}`} />{clinicMap.get(s.clinic_id)}</span></td><td><strong>{physicianMap.get(s.physician_id) || 'ไม่พบชื่อ'}</strong>{profilesByPhysician.get(s.physician_id)?.last_active_at && <span className="table-sub">เข้าเว็บ {dateTimeText(profilesByPhysician.get(s.physician_id).last_active_at)}</span>}</td><td><div className="quota-cell"><strong>{s.appointment_count}</strong><span>/ {s.appointment_quota}</span><div className="quota-track"><i style={{ width: `${Math.min(100, s.appointment_quota ? s.appointment_count / s.appointment_quota * 100 : 0)}%` }} /></div></div></td><td><ResponseBadge status={s.doctor_response_status} /></td></tr>)}</tbody></table></div> : <EmptyState icon={CalendarDays} title="ยังไม่มีรอบตรวจที่สร้างไว้" description="ตารางจะขึ้นอัตโนมัติเมื่อมีข้อมูลตารางประจำ" />}
     </section>
   </>
 }
@@ -337,11 +346,14 @@ function AdminSessions({ data, refresh, profile, focusSessionId, clearFocusSessi
     if (!focusSessionId) return
     const session = data.sessions.find((item) => item.id === focusSessionId)
     if (!session) { clearFocusSession(); return }
+    if (clinicFilter !== 'all' || physicianFilter !== 'all' || statusFilter !== 'all') {
+      setClinicFilter('all'); setPhysicianFilter('all'); setStatusFilter('all'); return
+    }
     const month = session.session_date.slice(0, 7)
     if (selectedMonth !== month) { setSelectedMonth(month); return }
     document.getElementById(`session-${focusSessionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     clearFocusSession()
-  }, [focusSessionId, selectedMonth, data.sessions, clearFocusSession])
+  }, [focusSessionId, selectedMonth, clinicFilter, physicianFilter, statusFilter, data.sessions, clearFocusSession])
   const clinicMap = new Map(data.clinics.map((c) => [c.id, c.name]))
   const physicianMap = new Map(data.physicians.map((p) => [p.id, p.display_name]))
   const filterDoctors = data.physicians.filter((p) => p.is_active && !p.is_placeholder && (clinicFilter === 'all' || p.clinic_id === clinicFilter))
@@ -349,17 +361,29 @@ function AdminSessions({ data, refresh, profile, focusSessionId, clearFocusSessi
     && (statusFilter === 'all' || s.session_status === statusFilter)
     && (clinicFilter === 'all' || s.clinic_id === clinicFilter)
     && (physicianFilter === 'all' || s.physician_id === physicianFilter))
+  const sessionsByDate = new Map()
+  visible.forEach((item) => sessionsByDate.set(item.session_date, [...(sessionsByDate.get(item.session_date) || []), item]))
   const save = async (id, payload) => {
     const { error } = await apiClient.from('schedule_sessions').update(payload).eq('id', id)
     if (error) throw error
     await refresh()
   }
   return <>
-    <PageTitle eyebrow="การจัดการรอบตรวจ" title="ตารางและการติดตาม" description="เลือกคลินิกและแพทย์เพื่อดูรอบ แล้วกรอกยอดนัดที่พยาบาลตรวจสอบแล้ว" action={<button className="button button-primary" onClick={() => generateNextSessions(refresh)}><Plus size={17} />สร้างรอบตรวจ 30 วัน</button>} />
+    <PageTitle eyebrow="การจัดการรอบตรวจ" title="ตารางและการติดตาม" description="รอบแยกตามวันและคลินิก · กรอกยอดหลังตรวจสอบแล้ว" />
     <div className="filter-bar filter-bar-pickers panel"><label className="select-field"><span>คลินิก</span><select value={clinicFilter} onChange={(e) => { setClinicFilter(e.target.value); setPhysicianFilter('all') }}><option value="all">ทุกคลินิก</option>{data.clinics.filter((clinic) => clinic.is_active).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label><label className="select-field"><span>แพทย์</span><select value={physicianFilter} onChange={(e) => setPhysicianFilter(e.target.value)}><option value="all">แพทย์ทุกท่าน</option>{filterDoctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.display_name}</option>)}</select></label><label className="select-field"><span>เดือน</span><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} /></label><label className="select-field"><span>สถานะ</span><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">ทุกสถานะ</option><option value="scheduled">กำหนดตรวจ</option><option value="cancelled">งดตรวจ</option></select></label></div>
-    <div id="session-list-start" className="session-list-heading"><div><h2>รอบตรวจในเดือน</h2><span>{visible.length} รายการ · เลือกคลินิก/แพทย์ด้านบนเพื่อกรองรายการ</span></div><button className="button button-outline button-small" onClick={() => generateNextSessions(refresh)}><RefreshCw size={15} />สร้างรอบ 30 วัน</button></div>
-    <div className="admin-session-list">{visible.map((s, i) => <AdminSessionCard key={s.id} item={s} index={i} clinicName={clinicMap.get(s.clinic_id)} physicianName={physicianMap.get(s.physician_id)} doctors={data.physicians.filter((p) => p.is_active && !p.is_placeholder)} onEdit={(type) => setModal({ type, session: s })} onSave={save} />)}
-      {!visible.length && <EmptyState icon={CalendarDays} title="ไม่มีรอบตรวจในช่วงนี้" description="สร้างรอบจากตารางประจำ หรือเลือกเดือนอื่น" />}</div>
+    <div id="session-list-start" className="session-list-heading"><div><h2>รอบตรวจในเดือน</h2><span>{visible.length} รายการ · เลือกคลินิก/แพทย์ด้านบนเพื่อกรองรายการ</span></div></div>
+    <div className="admin-session-groups">{[...sessionsByDate.entries()].map(([date, daySessions]) => {
+      const byClinic = new Map()
+      daySessions.forEach((item) => byClinic.set(item.clinic_id, [...(byClinic.get(item.clinic_id) || []), item]))
+      return <section className="admin-date-group" key={date}>
+        <header className="admin-date-heading"><div className="admin-date-number">{dateText(date, { day: 'numeric' })}</div><div><strong>{dateText(date, { weekday: 'long', month: 'long' })}</strong><span>{daySessions.length} รอบตรวจ</span></div></header>
+        {[...byClinic.entries()].map(([clinicId, clinicSessions]) => <div className="admin-clinic-group" key={clinicId}>
+          <div className="admin-clinic-heading"><i className={`clinic-dot ${clinicColor[data.clinics.findIndex((c) => c.id === clinicId) % clinicColor.length]}`} /><strong>{clinicMap.get(clinicId) || 'คลินิก'}</strong><span>{clinicSessions.length} รอบ</span></div>
+          <div className="admin-session-list">{clinicSessions.map((s, i) => <AdminSessionCard key={s.id} item={s} index={i} clinicName={clinicMap.get(s.clinic_id)} physicianName={physicianMap.get(s.physician_id)} doctors={data.physicians.filter((p) => p.is_active && !p.is_placeholder)} onEdit={(type) => setModal({ type, session: s })} onSave={save} />)}</div>
+        </div>)}
+      </section>
+    })}
+      {!visible.length && <EmptyState icon={CalendarDays} title="ไม่มีรอบตรวจในช่วงนี้" description="ตารางประจำจะแสดงให้อัตโนมัติในช่วง 30 วันข้างหน้า" />}</div>
     {modal && <SessionActionModal modal={modal} doctors={data.physicians.filter((p) => p.is_active && !p.is_placeholder)} profile={profile} onClose={() => setModal(null)} onSave={async (payload) => { await save(modal.session.id, payload); setModal(null) }} />}
   </>
 }
@@ -377,18 +401,22 @@ function AdminSessionCard({ item, index, clinicName, physicianName, doctors, onE
     catch { setError('บันทึกไม่สำเร็จ กรุณาตรวจสอบยอดนัดและโควตา') }
     finally { setSaving(false) }
   }
+  const countPending = item.session_status === 'scheduled' && !item.appointment_updated_at
+  const extraSession = !item.source_template_id
   return <article id={`session-${item.id}`} className={`admin-session-card ${item.session_status === 'cancelled' ? 'session-cancelled' : ''}`}>
     <div className="session-date-col"><div className="session-day">{dateText(item.session_date, { day: '2-digit' })}</div><div className="session-month">{dateText(item.session_date, { month: 'short', weekday: 'short' })}</div></div>
-    <div className="session-main"><div className="session-title-line"><strong>{clinicName || 'คลินิก'}</strong><span className="session-time"><Clock3 size={14} />{timeText(item.start_time)}–{timeText(item.end_time)} น.</span>{item.replaces_physician_id && <span className="subtle-tag">มีแพทย์ทดแทน</span>}</div>
+    <div className="session-main"><div className="session-title-line"><strong>{clinicName || 'คลินิก'}</strong><span className="session-time"><Clock3 size={14} />{timeText(item.start_time)}–{timeText(item.end_time)} น.</span>{extraSession && item.session_status === 'scheduled' && <span className="extra-session-tag">แพทย์ขอเพิ่มวัน</span>}{item.replaces_physician_id && <span className="subtle-tag">มีแพทย์ทดแทน</span>}</div>
       <div className="session-doctor"><UserRound size={15} />{physicianName || 'แพทย์'}<span className="middot">·</span><ResponseBadge status={item.doctor_response_status} /></div>
       {item.session_status === 'cancelled' && <div className="cancelled-note"><XCircle size={14} />งดตรวจ: {item.cancellation_reason || 'บันทึกโดยพยาบาล'}</div>}
+      {extraSession && item.doctor_response_note && <div className="extra-request-note">ข้อความถึงพยาบาล: {item.doctor_response_note}</div>}
       {item.doctor_response_status === 'busy' && <div className="busy-note"><AlertCircle size={14} />แจ้งติดภารกิจ{item.doctor_response_note ? `: ${item.doctor_response_note}` : ''}{!item.resolved_at && <span className="needs-resolution">· รอบันทึกผลจัดการ</span>}</div>}
       {item.admin_resolution_note && <div className="resolution-note"><Check size={14} />ผลการจัดการ: {item.admin_resolution_note}</div>}
     </div>
     <div className="session-quota-area">{editing ? <div className="inline-metrics"><label>ยอดนัดที่ตรวจแล้ว<input type="number" min="0" value={count} onChange={(e) => setCount(e.target.value)} /></label><span>/</span><label>โควตา<input type="number" min="0" value={quota} onChange={(e) => setQuota(e.target.value)} /></label></div> : <div className="metric-display"><strong>{item.appointment_count}<small> / {item.appointment_quota}</small></strong><span>ยอดที่พยาบาลตรวจแล้ว / โควตา</span><div className="quota-track"><i style={{ width: `${Math.min(100, item.appointment_quota ? item.appointment_count / item.appointment_quota * 100 : 0)}%` }} /></div></div>}
+      {!editing && countPending && item.session_status === 'scheduled' && <small className="count-pending-label">{extraSession ? 'พยาบาลตรวจยอดคำขอเพิ่มวัน' : 'รอพยาบาลตรวจยอดนัด'}</small>}
       {error && <small className="field-error">{error}</small>}
     </div>
-    <div className="session-actions">{editing ? <><button className="button button-small button-primary" disabled={saving} onClick={saveMetrics}>บันทึกยอดนัด</button><button className="icon-button" title="ยกเลิก" onClick={() => setEditing(false)}><X size={16} /></button></> : <><button className="button button-small button-outline" onClick={() => setEditing(true)}>{Number(item.appointment_count) === 0 ? 'กรอกยอดนัด' : 'ปรับยอดนัด'}</button>
+    <div className="session-actions">{editing ? <><button className="button button-small button-primary" disabled={saving} onClick={saveMetrics}>บันทึกยอดนัด</button><button className="icon-button" title="ยกเลิก" onClick={() => setEditing(false)}><X size={16} /></button></> : <><button className="button button-small button-outline" onClick={() => setEditing(true)}>{countPending ? 'ตรวจยอดนัด' : 'ปรับยอดนัด'}</button>
       {item.session_status === 'scheduled' && item.doctor_response_status === 'busy' && <button className="button button-small button-quiet" onClick={() => onEdit('busy')}>{item.resolved_at ? 'แก้ผลจัดการ' : 'ผลจัดการ'}</button>}
       {item.session_status === 'scheduled' && <button className="icon-button danger-icon" title="งดตรวจ" onClick={() => onEdit('cancel')}><XCircle size={17} /></button>}
       {item.session_status === 'scheduled' && <button className="icon-button" title="กำหนดแพทย์ทดแทน" onClick={() => onEdit('replace')}><Users size={17} /></button>}
@@ -425,10 +453,6 @@ function SessionActionModal({ modal, doctors, profile, onClose, onSave }) {
 }
 
 function AdminSetup({ data, refresh }) {
-  const [clinicName, setClinicName] = useState('')
-  const [clinicShort, setClinicShort] = useState('')
-  const [doctorName, setDoctorName] = useState('')
-  const [doctorClinicId, setDoctorClinicId] = useState('')
   const [weekday, setWeekday] = useState('1')
   const [weekOfMonth, setWeekOfMonth] = useState('0')
   const [clinicId, setClinicId] = useState('')
@@ -443,18 +467,6 @@ function AdminSetup({ data, refresh }) {
   const physicianMap = new Map(data.physicians.map((p) => [p.id, p]))
   const activeDoctors = data.physicians.filter((p) => p.is_active)
 
-  async function addClinic(e) {
-    e.preventDefault(); setSaving(true); setNotice(''); setSlotError('')
-    const { error } = await apiClient.from('clinics').insert({ name: clinicName.trim(), short_name: (clinicShort || clinicName).trim() })
-    if (error) setSlotError(error.message); else { setClinicName(''); setClinicShort(''); setNotice('เพิ่มคลินิกแล้ว'); await refresh() }
-    setSaving(false)
-  }
-  async function addPhysician(e) {
-    e.preventDefault(); setSaving(true); setNotice(''); setSlotError('')
-    const { error } = await apiClient.from('physicians').insert({ display_name: doctorName.trim(), clinic_id: doctorClinicId, is_placeholder: false, notes: 'เพิ่มโดยพยาบาลผู้ดูแล' })
-    if (error) setSlotError(error.message); else { setDoctorName(''); setNotice('เพิ่มข้อมูลแพทย์แล้ว'); await refresh() }
-    setSaving(false)
-  }
   async function addTemplate(e) {
     e.preventDefault(); setSaving(true); setSlotError(''); setNotice('')
     const isSaturday = Number(weekday) === 6
@@ -477,10 +489,6 @@ function AdminSetup({ data, refresh }) {
     const { error } = await apiClient.from('physicians').update({ is_active: !physician.is_active }).eq('id', physician.id)
     if (error) setSlotError(error.message); else await refresh()
   }
-  async function toggleClinic(clinic) {
-    const { error } = await apiClient.from('clinics').update({ is_active: !clinic.is_active }).eq('id', clinic.id)
-    if (error) setSlotError(error.message); else await refresh()
-  }
   async function savePhysicianName() {
     if (!physicianEdit?.display_name.trim()) { setSlotError('กรุณาระบุชื่อแพทย์'); return }
     setSaving(true); setSlotError('')
@@ -490,17 +498,13 @@ function AdminSetup({ data, refresh }) {
   }
   const dow = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์']
   return <>
-    <PageTitle eyebrow="จัดการข้อมูลตั้งต้น" title="แพทย์และตารางประจำ" description="แก้ข้อมูลคลินิก แพทย์ และวันออกตรวจประจำก่อนสร้างรอบตรวจจริง" />
+    <PageTitle eyebrow="จัดการข้อมูลตั้งต้น" title="แพทย์และตารางประจำ" description="คลินิกและรายชื่อแพทย์กำหนดไว้แล้ว · ตั้งวันประจำและโควตาที่นี่" />
     {notice && <div className="success-banner"><Check size={16} />{notice}<button className="icon-button" onClick={() => setNotice('')}><X size={15} /></button></div>}
     {slotError && <div className="page-alert"><AlertCircle size={17} />{slotError}<button className="icon-button" onClick={() => setSlotError('')}><X size={15} /></button></div>}
     <div className="setup-grid">
-      <section className="panel setup-panel"><div className="panel-header"><div><h2>คลินิก</h2><p>ชื่อคลินิกที่ใช้ในตาราง</p></div><span className="count-pill">{data.clinics.length}</span></div>
-        <div className="chip-list">{data.clinics.map((c, i) => <button type="button" className={`clinic-chip ${!c.is_active ? 'clinic-chip-inactive' : ''}`} key={c.id} onClick={() => toggleClinic(c)} title={c.is_active ? 'กดเพื่อปิดใช้คลินิก' : 'กดเพื่อเปิดใช้คลินิก'}><i className={`clinic-dot ${clinicColor[i % clinicColor.length]}`} />{c.name}<span>{c.is_active ? 'ใช้งาน' : 'ปิดใช้'}</span></button>)}</div>
-        <form className="compact-form two-fields" onSubmit={addClinic}><label>ชื่อคลินิก<input required value={clinicName} onChange={(e) => setClinicName(e.target.value)} placeholder="เช่น คลินิกผิวหนัง" /></label><label>ชื่อย่อ<input required value={clinicShort} onChange={(e) => setClinicShort(e.target.value)} placeholder="ชื่อย่อ" /></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มคลินิก</button></form>
-      </section>
-      <section className="panel setup-panel"><div className="panel-header"><div><h2>เพิ่มข้อมูลแพทย์</h2><p>แพทย์เลือกชื่อตัวเองจากหน้าแรกเพื่อเข้าดูตาราง</p></div><UserRound size={19} className="muted-icon" /></div>
-        <form className="compact-form two-fields" onSubmit={addPhysician}><label>ชื่อที่แสดง<input required value={doctorName} onChange={(e) => setDoctorName(e.target.value)} placeholder="เช่น อ.ชื่อ" /></label><label>กลุ่มคลินิก<select required value={doctorClinicId} onChange={(e) => setDoctorClinicId(e.target.value)}><option value="">เลือกคลินิก</option>{data.clinics.filter((c) => c.is_active).map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}</select></label><button className="button button-primary button-small" disabled={saving}><Plus size={15} />เพิ่มแพทย์</button></form>
-        <div className="helper-line"><AlertCircle size={15} />ตรวจสอบชื่อในตารางภาพก่อนเปลี่ยน placeholder เป็นชื่อจริง</div>
+      <section className="panel setup-panel setup-directory-summary"><div className="panel-header"><div><h2>คลินิกเฉพาะทาง</h2><p>มี 6 กลุ่มตามข้อมูลตั้งต้น</p></div><span className="count-pill">{data.clinics.filter((c) => c.is_active).length} คลินิก</span></div>
+        <div className="chip-list">{data.clinics.map((c, i) => <span className={`clinic-chip ${!c.is_active ? 'clinic-chip-inactive' : ''}`} key={c.id}><i className={`clinic-dot ${clinicColor[i % clinicColor.length]}`} />{c.name}<span>{c.is_active ? 'ใช้งาน' : 'ปิดใช้'}</span></span>)}</div>
+        <div className="helper-line"><UserRound size={15} />รายชื่อแพทย์อยู่ด้านล่าง · ยืนยันชื่อเฉพาะรายการที่แจ้งว่ารอยืนยัน</div>
       </section>
     </div>
     <section className="panel template-panel"><div className="panel-header"><div><h2>ตารางเวรประจำ</h2><p>แยกจากรอบตรวจที่สร้างแล้ว การแก้ตารางนี้มีผลต่อรอบที่สร้างในอนาคตเท่านั้น</p></div><span className="subtle-tag">จ–ศ 16:00–20:00 · ส 08:00–12:00</span></div>
@@ -560,15 +564,16 @@ function AdminHistory({ data }) {
     </section></>
 }
 
-function DoctorContent({ tab, data, refresh, profile }) {
+function DoctorContent({ tab, data, refresh, profile, focusSessionId, clearFocusSession }) {
   if (tab === 'notifications') return <NotificationCenter notifications={data.notifications} refresh={refresh} />
-  return <DoctorDashboard data={data} refresh={refresh} profile={profile} />
+  return <DoctorDashboard data={data} refresh={refresh} profile={profile} focusSessionId={focusSessionId} clearFocusSession={clearFocusSession} />
 }
 
-function DoctorDashboard({ data, refresh, profile }) {
+function DoctorDashboard({ data, refresh, profile, focusSessionId, clearFocusSession }) {
   const [month, setMonth] = useState(today().slice(0, 7))
   const [selectedDate, setSelectedDate] = useState('')
   const [responseModal, setResponseModal] = useState(null)
+  const [extraSessionModal, setExtraSessionModal] = useState(false)
   const thisMonth = data.sessions.filter((s) => s.session_date.startsWith(month))
   const upcoming = data.sessions.filter((s) => s.session_status === 'scheduled' && s.session_date >= today()).sort((a, b) => `${a.session_date}${a.start_time}`.localeCompare(`${b.session_date}${b.start_time}`))
   const next = upcoming[0]
@@ -577,13 +582,35 @@ function DoctorDashboard({ data, refresh, profile }) {
   const dateSessions = thisMonth.filter((s) => s.session_date === selectedDate)
   const unread = data.notifications.filter((n) => !n.read_at).length
   const nextUp = next && next.session_date <= addDays(today(), 7)
+  useEffect(() => {
+    if (!focusSessionId) return
+    const session = data.sessions.find((item) => item.id === focusSessionId)
+    if (!session) { clearFocusSession(); return }
+    const sessionMonth = session.session_date.slice(0, 7)
+    if (month !== sessionMonth) { setMonth(sessionMonth); return }
+    setSelectedDate(session.session_date)
+    if (session.doctor_response_status === 'pending' && session.physician_id === profile.physician_id) setResponseModal(session)
+    window.setTimeout(() => document.getElementById('doctor-selected-day')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+    clearFocusSession()
+  }, [focusSessionId, month, data.sessions, profile.physician_id, clearFocusSession])
   async function respond(session, response, note) {
     const { error } = await apiClient.rpc('respond_to_session', { p_session_id: session.id, p_response: response, p_note: note || null })
     if (error) throw error
     await refresh()
   }
+  async function requestExtraSession(payload) {
+    const { error } = await apiClient.rpc('request_extra_session', {
+      p_session_date: payload.session_date, p_start_time: payload.start_time,
+      p_end_time: payload.end_time, p_note: payload.note || null,
+    })
+    if (error) throw error
+    await refresh()
+    setMonth(payload.session_date.slice(0, 7))
+    setSelectedDate(payload.session_date)
+    setExtraSessionModal(false)
+  }
   return <>
-    <PageTitle eyebrow="พื้นที่แพทย์" title={`สวัสดี, ${profile.display_name}`} description="ดูตารางออกตรวจและยอดนัดของคุณ พร้อมตอบกลับการยืนยันในหน้าเว็บ" action={<button className="button button-outline" onClick={() => window.dispatchEvent(new CustomEvent('go-notifications'))}><Bell size={17} />การแจ้งเตือน {unread > 0 && <span className="button-badge">{unread}</span>}</button>} />
+    <PageTitle eyebrow="พื้นที่แพทย์" title={`สวัสดี, ${profile.display_name}`} description="ดูตารางออกตรวจและยอดนัดของคุณ พร้อมตอบกลับการยืนยันในหน้าเว็บ" action={<div className="doctor-head-actions"><button className="button button-outline" onClick={() => window.dispatchEvent(new CustomEvent('go-notifications'))}><Bell size={17} />การแจ้งเตือน {unread > 0 && <span className="button-badge">{unread}</span>}</button><button className="button button-primary" onClick={() => setExtraSessionModal(true)}><Plus size={17} />เพิ่มวันออกตรวจ</button></div>} />
     {next ? <section className="next-session-card"><div className="next-glow" /><div className="next-label"><span className="next-icon"><CalendarDays size={18} /></span><span>{nextUp ? 'รอบตรวจถัดไป · ใกล้ถึงวัน' : 'รอบตรวจถัดไป'}</span><span className={`response-chip response-${nextAssigned ? next.doctor_response_status : 'confirmed'}`}>{nextAssigned ? responseLabel(next.doctor_response_status) : 'มีแพทย์ทดแทน'}</span></div><div className="next-main"><div><strong>{clinicMap.get(next.clinic_id) || 'คลินิก'}</strong><span>{weekdayText(next.session_date)} {dateText(next.session_date, { day: 'numeric', month: 'long', year: 'numeric' })}</span><span className="next-time"><Clock3 size={17} />{timeText(next.start_time)}–{timeText(next.end_time)} น.</span></div><div className="next-appointments"><span>ยอดนัด · โควตา · {remainingText(next)}</span><strong>{next.appointment_count}<small> / {next.appointment_quota}</small></strong><div className="quota-track quota-track-light"><i style={{ width: `${Math.min(100, next.appointment_quota ? next.appointment_count / next.appointment_quota * 100 : 0)}%` }} /></div><small className="updated-at">ยอดนัดอัปเดต {dateTimeText(next.appointment_updated_at || next.updated_at)}</small></div></div>
       {!nextAssigned && next.replaces_physician_id === profile.physician_id && <div className="replacement-banner"><Users size={16} />รอบนี้มีแพทย์ทดแทนแล้ว คุณไม่ต้องตอบกลับรอบนี้</div>}
       {nextAssigned && next.doctor_response_status === 'pending' && <div className="next-actions"><button className="button button-light" onClick={() => respond(next, 'confirmed')}><Check size={16} />ยืนยันออกตรวจ</button><button className="button button-light-outline" onClick={() => setResponseModal(next)}><AlertCircle size={16} />แจ้งพยาบาล</button></div>}
@@ -593,11 +620,12 @@ function DoctorDashboard({ data, refresh, profile }) {
     </section> : <section className="next-session-empty"><CalendarDays size={23} /><div><strong>ยังไม่มีรอบตรวจถัดไป</strong><span>ติดต่อพยาบาลหากตารางของคุณยังไม่แสดง</span></div></section>}
     <section className="panel calendar-panel"><div className="panel-header calendar-heading"><div><h2>ตารางรายเดือน</h2><p>แตะวันที่มีรอบตรวจเพื่อดูคลินิกและยอดนัด</p></div><div className="month-control"><button className="icon-button" onClick={() => setMonth(shiftMonth(month, -1))}><ArrowLeft size={17} /></button><strong>{new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric', timeZone: BANGKOK }).format(new Date(`${month}-01T00:00:00+07:00`))}</strong><button className="icon-button" onClick={() => setMonth(shiftMonth(month, 1))}><ArrowRight size={17} /></button></div></div>
       <MonthCalendar month={month} sessions={thisMonth} selectedDate={selectedDate} onSelect={(date) => setSelectedDate(date === selectedDate ? '' : date)} />
-      {selectedDate && <div className="selected-day-detail"><div className="selected-day-head"><h3>{dateText(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}</h3><button className="text-button" onClick={() => setSelectedDate('')}>ปิด</button></div>{dateSessions.length ? dateSessions.map((s) => <DoctorSessionRow key={s.id} item={s} clinicName={clinicMap.get(s.clinic_id)} onRespond={setResponseModal} physicianId={profile.physician_id} />) : <p className="empty-inline">ไม่มีรอบตรวจในวันนี้</p>}</div>}
+      {selectedDate && <div className="selected-day-detail" id="doctor-selected-day"><div className="selected-day-head"><h3>{dateText(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}</h3><button className="text-button" onClick={() => setSelectedDate('')}>ปิด</button></div>{dateSessions.length ? dateSessions.map((s) => <DoctorSessionRow key={s.id} item={s} clinicName={clinicMap.get(s.clinic_id)} onRespond={setResponseModal} physicianId={profile.physician_id} />) : <p className="empty-inline">ไม่มีรอบตรวจในวันนี้</p>}</div>}
     </section>
     <div className="doctor-summary-grid"><section className="panel summary-panel"><div className="panel-header"><div><h2>รายการถัดไป</h2><p>วันและยอดนัดของคุณ</p></div><CalendarDays size={18} className="muted-icon" /></div>{upcoming.slice(0, 4).map((s) => <DoctorSessionRow key={s.id} item={s} clinicName={clinicMap.get(s.clinic_id)} onRespond={setResponseModal} physicianId={profile.physician_id} compact />)}{!upcoming.length && <p className="empty-inline">ยังไม่มีรอบตรวจในอนาคต</p>}</section>
       <section className="panel summary-panel notice-summary"><div className="panel-header"><div><h2>การแจ้งเตือนล่าสุด</h2><p>ระบบสร้างเตือนเมื่อเปิดเว็บตามกำหนด</p></div><button className="text-button" onClick={() => window.dispatchEvent(new CustomEvent('go-notifications'))}>ทั้งหมด <ArrowRight size={15} /></button></div>{data.notifications.slice(0, 3).map((n) => <div className={`notice-mini ${!n.read_at ? 'notice-unread' : ''}`} key={n.id}><span className="notice-mini-icon"><Bell size={15} /></span><div><strong>{n.title}</strong><span>{n.body}</span></div></div>)}{!data.notifications.length && <p className="empty-inline">ยังไม่มีการแจ้งเตือน</p>}</section></div>
-    {responseModal && <BusyResponseModal session={responseModal} clinicName={clinicMap.get(responseModal.clinic_id)} onClose={() => setResponseModal(null)} onSave={async (note) => { await respond(responseModal, 'busy', note); setResponseModal(null) }} />}
+    {responseModal && <SessionResponseModal session={responseModal} clinicName={clinicMap.get(responseModal.clinic_id)} onClose={() => setResponseModal(null)} onSave={async (response, note) => { await respond(responseModal, response, note); setResponseModal(null) }} />}
+    {extraSessionModal && <ExtraSessionModal clinicName={clinicMap.get(data.physicians.find((p) => p.id === profile.physician_id)?.clinic_id)} onClose={() => setExtraSessionModal(false)} onSave={requestExtraSession} />}
   </>
 }
 
@@ -614,8 +642,9 @@ function MonthCalendar({ month, sessions, selectedDate, onSelect }) {
   return <div className="month-calendar"><div className="calendar-grid calendar-weekdays">{weekdays.map((d, i) => <div className={i === 0 || i === 6 ? 'weekend' : ''} key={d}>{d}</div>)}</div><div className="calendar-grid">{cells.map((day, index) => {
     const dateKey = day ? `${month}-${String(day).padStart(2, '0')}` : ''
     const daySessions = day ? sessionsByDay.get(day) || [] : []
-    return <button key={`${month}-${index}`} disabled={!day} onClick={() => day && onSelect(dateKey)} className={`calendar-cell ${!day ? 'cell-empty' : ''} ${day === todayDay ? 'cell-today' : ''} ${selectedDate === dateKey ? 'cell-selected' : ''} ${index % 7 === 0 || index % 7 === 6 ? 'cell-weekend' : ''}`}><span className="calendar-number">{day || ''}</span>{daySessions.length > 0 && <span className="calendar-events">{daySessions.slice(0, 2).map((s, i) => <i key={`${s.id}-${i}`} className={`calendar-event-dot event-${clinicColor[i % clinicColor.length]}`} />)}{daySessions.length > 2 && <small>+{daySessions.length - 2}</small>}</span>}</button>
-  })}</div><div className="calendar-legend"><span><i className="calendar-event-dot event-teal" />มีรอบตรวจ</span><span><i className="calendar-event-dot event-rose" />มากกว่า 1 รอบ</span></div></div>
+    const scheduledCount = daySessions.filter((s) => s.session_status === 'scheduled').length
+    return <button key={`${month}-${index}`} disabled={!day} onClick={() => day && onSelect(dateKey)} className={`calendar-cell ${!day ? 'cell-empty' : ''} ${scheduledCount ? 'has-sessions' : ''} ${scheduledCount > 1 ? 'has-multiple-sessions' : ''} ${day === todayDay ? 'cell-today' : ''} ${selectedDate === dateKey ? 'cell-selected' : ''} ${index % 7 === 0 || index % 7 === 6 ? 'cell-weekend' : ''}`}><span className="calendar-number">{day || ''}</span>{daySessions.length > 0 && <span className="calendar-events">{daySessions.slice(0, 2).map((s, i) => <i key={`${s.id}-${i}`} className={`calendar-event-dot event-${clinicColor[i % clinicColor.length]}`} />)}{daySessions.length > 2 && <small>+{daySessions.length - 2}</small>}</span>}</button>
+  })}</div><div className="calendar-legend"><span><i className="calendar-event-dot event-teal" />วันสีเขียวมีรอบตรวจ</span><span><i className="calendar-event-dot event-rose" />มากกว่า 1 รอบ</span></div></div>
 }
 
 function DoctorSessionRow({ item, clinicName, onRespond, physicianId, compact = false }) {
@@ -623,16 +652,55 @@ function DoctorSessionRow({ item, clinicName, onRespond, physicianId, compact = 
   return <div className={`doctor-session-row ${compact ? 'doctor-session-compact' : ''}`}><div className="doctor-session-day"><strong>{dateText(item.session_date, { day: 'numeric' })}</strong><span>{dateText(item.session_date, { month: 'short', weekday: 'short' })}</span></div><div className="doctor-session-copy"><strong>{clinicName || 'คลินิก'}</strong><span><Clock3 size={13} />{timeText(item.start_time)}–{timeText(item.end_time)} น. <span className="middot">·</span> นัด {item.appointment_count}/{item.appointment_quota} <span className="middot">·</span> {remainingText(item)}</span></div>{item.session_status === 'cancelled' ? <span className="status-pill status-gray">งดตรวจ</span> : assigned ? <ResponseBadge status={item.doctor_response_status} /> : <span className="status-pill status-amber">มีแพทย์ทดแทน</span>}{assigned && item.doctor_response_status === 'pending' && item.session_status === 'scheduled' && <button className="text-button" onClick={() => onRespond(item)}>ตอบกลับ</button>}</div>
 }
 
-function BusyResponseModal({ session, clinicName, onClose, onSave }) {
+function SessionResponseModal({ session, clinicName, onClose, onSave }) {
+  const [mode, setMode] = useState('choose')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   async function submit() {
-    if (!note.trim()) { setError('กรุณาระบุหมายเหตุให้พยาบาลทราบ'); return }
+    if (mode === 'busy' && !note.trim()) { setError('กรุณาระบุหมายเหตุให้พยาบาลทราบ'); return }
     setSaving(true); setError('')
-    try { await onSave(note.trim()) } catch { setError('ส่งข้อมูลไม่สำเร็จ ลองอีกครั้ง'); setSaving(false) }
+    try { await onSave(mode === 'busy' ? 'busy' : 'confirmed', note.trim()) } catch { setError('ส่งข้อมูลไม่สำเร็จ ลองอีกครั้ง'); setSaving(false) }
   }
-  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาล</div><h2>แจ้งติดภารกิจ</h2><p>{clinicName} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)} น.</p><div className="soft-warning"><AlertCircle size={17} /><span>รายการนัดจะยังไม่ถูกยกเลิก พยาบาลจะรับเรื่องและโทรประสานการนัดตามขั้นตอน</span></div><label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุข้อมูลที่ต้องการแจ้งพยาบาล" /><small className="note-privacy">บันทึกเฉพาะเหตุขัดข้อง · ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving} onClick={submit}><AlertCircle size={16} />{saving ? 'กำลังส่ง…' : 'แจ้งพยาบาล'}</button></div></section></div>
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="response-modal-title"><button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">{clinicName || 'คลินิก'} · {dateText(session.session_date, { weekday: 'long', day: 'numeric', month: 'long' })} · {timeText(session.start_time)}–{timeText(session.end_time)} น.</div><h2 id="response-modal-title">ตอบกลับรอบตรวจ</h2>
+    {mode === 'choose' ? <><p>กรุณาเลือกว่าจะออกตรวจหรือแจ้งพยาบาลว่าติดภารกิจ</p><div className="soft-warning"><AlertCircle size={17} /><span>หากแจ้งติดภารกิจ รอบตรวจและยอดนัดจะยังไม่ถูกยกเลิก พยาบาลจะเป็นผู้ประสานงานต่อ</span></div><div className="modal-actions response-choice-actions"><button className="button button-light" disabled={saving} onClick={() => { setMode('confirmed'); submit() }}><Check size={16} />ยืนยันออกตรวจ</button><button className="button button-outline" onClick={() => { setMode('busy'); setError('') }}><AlertCircle size={16} />แจ้งติดภารกิจ</button></div></> : <><p>{mode === 'busy' ? 'แจ้งรายละเอียดให้พยาบาลทราบ' : 'ยืนยันออกตรวจรอบนี้?'}</p>{mode === 'busy' && <label className="modal-label">หมายเหตุ<textarea rows="3" maxLength={500} autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="ระบุเหตุที่ต้องแจ้งพยาบาล" /><small className="note-privacy">ไม่ใส่ชื่อหรือข้อมูลผู้ป่วย</small></label>}{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="modal-actions"><button className="button button-quiet" onClick={() => setMode('choose')}>ย้อนกลับ</button><button className="button button-primary" disabled={saving} onClick={submit}>{mode === 'busy' ? <AlertCircle size={16} /> : <Check size={16} />}{saving ? 'กำลังบันทึก…' : mode === 'busy' ? 'ส่งแจ้งพยาบาล' : 'ยืนยันออกตรวจ'}</button></div></>}
+  </section></div>
+}
+
+function defaultExtraTimes(date) {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay()
+  if (day === 6) return { start_time: '08:00', end_time: '12:00' }
+  if (day === 0) return { start_time: '09:00', end_time: '13:00' }
+  return { start_time: '16:00', end_time: '20:00' }
+}
+
+function ExtraSessionModal({ clinicName, onClose, onSave }) {
+  const initialDate = addDays(today(), 1)
+  const [sessionDate, setSessionDate] = useState(initialDate)
+  const [times, setTimes] = useState(defaultExtraTimes(initialDate))
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  async function submit() {
+    setSaving(true); setError('')
+    try {
+      await onSave({ session_date: sessionDate, ...times, note: note.trim() })
+    } catch (saveError) {
+      setError(saveError.message || 'ส่งคำขอไม่สำเร็จ กรุณาลองอีกครั้ง')
+      setSaving(false)
+    }
+  }
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal-card extra-session-modal" role="dialog" aria-modal="true" aria-labelledby="extra-session-title">
+    <button className="modal-close icon-button" onClick={onClose}><X size={18} /></button><div className="eyebrow">แจ้งพยาบาล · {clinicName || 'คลินิกของคุณ'}</div><h2 id="extra-session-title">เพิ่มวันออกตรวจ</h2>
+    <p>เลือกวันที่ออกตรวจเพิ่มเติม ระบบจะบันทึกเป็นยืนยันแล้วและส่งขึ้น Dashboard พยาบาลให้ตรวจยอดนัด</p>
+    <div className="extra-session-fields"><label className="modal-label">วันที่ออกตรวจ<input type="date" min={today()} max={addDays(today(), 30)} value={sessionDate} onChange={(e) => { setSessionDate(e.target.value); setTimes(defaultExtraTimes(e.target.value)) }} /></label>
+      <div className="time-fields"><label className="modal-label">เริ่ม<input type="time" value={times.start_time} onChange={(e) => setTimes({ ...times, start_time: e.target.value })} /></label><label className="modal-label">สิ้นสุด<input type="time" value={times.end_time} onChange={(e) => setTimes({ ...times, end_time: e.target.value })} /></label></div>
+    </div>
+    <label className="modal-label">หมายเหตุถึงพยาบาล (ถ้ามี)<textarea rows="2" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น ขอเพิ่มรอบชดเชยจากวันที่…" /><small className="note-privacy">พยาบาลจะตรวจสอบยอดและโควตาก่อนบันทึก · ไม่ใส่ข้อมูลผู้ป่วย</small></label>
+    <div className="soft-warning extra-session-confirm"><CheckCheck size={17} /><span>กดบันทึกแล้วถือว่ายืนยันออกตรวจ ไม่ต้องยืนยันซ้ำ</span></div>
+    {error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}
+    <div className="modal-actions"><button className="button button-quiet" onClick={onClose}>กลับ</button><button className="button button-primary" disabled={saving || !sessionDate || !times.start_time || !times.end_time} onClick={submit}><Plus size={16} />{saving ? 'กำลังบันทึก…' : 'เพิ่มวันและแจ้งพยาบาล'}</button></div>
+  </section></div>
 }
 
 function NotificationCenter({ notifications, refresh }) {
@@ -641,10 +709,12 @@ function NotificationCenter({ notifications, refresh }) {
     window.addEventListener('go-notifications', listener)
     return () => window.removeEventListener('go-notifications', listener)
   }, [])
-  async function markRead(notification) {
-    if (notification.read_at) return
-    await apiClient.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', notification.id)
-    refresh()
+  async function openNotification(notification) {
+    if (!notification.read_at) {
+      await apiClient.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', notification.id)
+      refresh()
+    }
+    if (notification.session_id) window.dispatchEvent(new CustomEvent('open-doctor-session', { detail: { sessionId: notification.session_id } }))
   }
   async function markAll() {
     const unread = notifications.filter((n) => !n.read_at).map((n) => n.id)
@@ -655,7 +725,7 @@ function NotificationCenter({ notifications, refresh }) {
   return <><PageTitle eyebrow="ศูนย์ข้อความ" title="การแจ้งเตือน" description="การเตือนจะแสดงในเว็บเมื่อคุณเปิดหน้าเว็บตามช่วง 7, 3 และ 1 วันก่อนตรวจ" action={unread > 0 && <button className="button button-outline" onClick={markAll}><CheckCheck size={16} />อ่านทั้งหมด</button>} />
     <div className="notification-explainer"><span><Bell size={18} /></span><div><strong>แจ้งเตือนในเว็บเท่านั้น</strong><p>ไม่มีการส่ง Push หรือ SMS · ควรเปิดเว็บเพื่อตรวจสอบเป็นประจำ และพยาบาลจะติดตามบัญชีที่ไม่ได้เข้าใช้งาน</p></div></div>
     <section className="panel notification-panel"><div className="panel-header"><div><h2>ทั้งหมด</h2><p>{unread} รายการยังไม่ได้อ่าน</p></div><span className="count-pill">{notifications.length}</span></div>
-      <div className="notification-list">{notifications.map((n) => <button className={`notification-row ${!n.read_at ? 'notification-unread' : ''}`} key={n.id} onClick={() => markRead(n)}><div className={`notification-icon ${n.kind.startsWith('reminder') ? 'reminder-icon' : 'update-icon'}`}><Bell size={18} /></div><div className="notification-copy"><div><strong>{n.title}</strong>{!n.read_at && <i className="unread-dot" />}</div><p>{n.body}</p><span>{dateTimeText(n.created_at)}</span></div><div className="notification-state">{n.read_at ? <Check size={16} /> : <span>ใหม่</span>}</div></button>)}
+      <div className="notification-list">{notifications.map((n) => <button className={`notification-row ${!n.read_at ? 'notification-unread' : ''}`} key={n.id} onClick={() => openNotification(n)}><div className={`notification-icon ${n.kind.startsWith('reminder') ? 'reminder-icon' : 'update-icon'}`}><Bell size={18} /></div><div className="notification-copy"><div><strong>{n.title}</strong>{!n.read_at && <i className="unread-dot" />}</div><p>{n.body}</p><span>{dateTimeText(n.created_at)}</span></div><div className="notification-state"><span className="notification-open-label">เปิดรอบตรวจ</span>{n.read_at && <Check size={16} />}</div></button>)}
         {!notifications.length && <EmptyState icon={Bell} title="ยังไม่มีการแจ้งเตือน" description="เมื่อมีรอบตรวจใกล้ถึงวัน ระบบจะแจ้งเตือนที่นี่เมื่อคุณเปิดเว็บ" />}</div>
     </section></>
 }
@@ -666,12 +736,6 @@ function ResponseBadge({ status }) {
 }
 function responseLabel(status) { return status === 'confirmed' ? 'ยืนยันแล้ว' : status === 'busy' ? 'ติดภารกิจ' : 'รอยืนยัน' }
 function EmptyState({ icon: Icon, title, description }) { return <div className="empty-state"><div><Icon size={21} /></div><strong>{title}</strong><span>{description}</span></div> }
-
-async function generateNextSessions(refresh) {
-  const { data, error } = await apiClient.rpc('generate_schedule_sessions', { p_from: today(), p_to: addDays(today(), 30) })
-  if (error) window.alert(error.message || 'สร้างรอบตรวจไม่สำเร็จ')
-  else { window.alert(`สร้างรอบตรวจใหม่ ${data ?? 0} รายการ · รอบที่มีอยู่แล้วจะไม่ถูกสร้างซ้ำ`); await refresh() }
-}
 
 export default App
 

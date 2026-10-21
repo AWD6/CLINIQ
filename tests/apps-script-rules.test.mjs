@@ -82,6 +82,47 @@ test('enforces the 30-day session generation limit on the server', () => {
   assert.throws(() => context.generateSessions_(nurse, '2026-10-19', '2026-10-20'), /ไม่เกิน 30 วัน/)
 })
 
+test('automatically prepares only the next 30 days and leaves appointment counts unchecked', () => {
+  const { context, tables } = createHarness()
+  tables.ScheduleTemplates.push({
+    _row: 2, id: 't1', clinic_id: 'c1', physician_id: 'p1', weekday: 1, week_of_month: 0,
+    start_time: '16:00', end_time: '20:00', appointment_quota: 20, effective_from: '2026-10-01', is_active: true,
+  })
+
+  context.ensureUpcomingSessions_({ id: 'admin', role: 'admin' })
+  const firstCount = tables.Sessions.length
+  context.ensureUpcomingSessions_({ id: 'admin', role: 'admin' })
+
+  assert.equal(firstCount, 4)
+  assert.equal(tables.Sessions.length, firstCount)
+  assert.ok(tables.Sessions.every((row) => row.session_date <= '2026-11-19'))
+  assert.ok(tables.Sessions.every((row) => row.appointment_updated_at === null))
+})
+
+test('a physician can add an already-confirmed exception session for nurse appointment review', () => {
+  const { context, tables, events } = createHarness()
+  tables.Physicians[0].clinic_id = 'c1'
+  const physician = { id: 'u1', role: 'physician', physician_id: 'p1', display_name: 'Test physician' }
+
+  const created = context.requestExtraSession_(physician, {
+    p_session_date: '2026-10-24', p_start_time: '08:00', p_end_time: '12:00', p_note: 'รอบชดเชย',
+  })
+
+  assert.equal(created.source_template_id, null)
+  assert.equal(created.session_status, 'scheduled')
+  assert.equal(created.doctor_response_status, 'confirmed')
+  assert.equal(created.appointment_updated_at, null)
+  assert.equal(created.doctor_response_note, 'รอบชดเชย')
+  assert.equal(tables.Sessions.length, 1)
+  assert.equal(events.length, 1)
+  assert.throws(() => context.requestExtraSession_(physician, {
+    p_session_date: '2026-10-24', p_start_time: '16:00', p_end_time: '20:00',
+  }), /วันนี้มีรอบตรวจของคุณอยู่แล้ว/)
+  assert.throws(() => context.requestExtraSession_(physician, {
+    p_session_date: '2026-11-20', p_start_time: '16:00', p_end_time: '20:00',
+  }), /30 วันข้างหน้า/)
+})
+
 test('loads dashboard data and signed-in profile together', () => {
   const { context } = createHarness()
   const nurse = { id: 'admin', role: 'admin', display_name: 'พยาบาล', is_active: true }
